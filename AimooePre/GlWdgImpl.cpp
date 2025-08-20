@@ -43,7 +43,7 @@ int getCvType() {
     return CV_32FC1;
 }
 
-//×ª³Écv::Mat¾ØÕó£¬ÀûÓÃÆäÅú´¦Àí¼ÆËã
+//×ªï¿½ï¿½cv::Matï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 template<typename T, typename T2>
 void convertCTToMat(T ctData, int width, int height, int depth, std::vector<cv::Mat>& mats) {
     mats.resize(depth);
@@ -75,6 +75,11 @@ GlWdgImpl::GlWdgImpl(QWidget* parent) : QWidget(parent) {
     this->setAttribute(Qt::WA_DeleteOnClose);
     m_timerId = startTimer(10);
     RegisterTimer::stGetInstance()->setErrCB(std::bind(&GlWdgImpl::handleLicense, this, std::placeholders::_1));
+    
+    // åˆå§‹åŒ–å˜æ¢å‚æ•°
+    m_zoomFactor = 1.0;
+    m_panOffset = QPointF(0, 0);
+    m_viewCenter = QPointF(0, 0);  // å°†åœ¨loadCtInfoæ—¶æ­£ç¡®åˆå§‹åŒ–
 }
 
 GlWdgImpl::~GlWdgImpl() {
@@ -178,7 +183,7 @@ void GlWdgImpl::showCenter(QVector3D p)
     auto yspace = dicom.ySpacing;
     auto zspace = dicom.zSpacing;
 
-    std::vector<double> imgPos = pCtInfo->pCtInfo->pSliceInfo->imgPosition;//Ô­µã×öÁË±ä¶¯
+    std::vector<double> imgPos = pCtInfo->pCtInfo->pSliceInfo->imgPosition;//Ô­ï¿½ï¿½ï¿½ï¿½ï¿½Ë±ä¶¯
     float ct_width, ct_height, ctWidthSpacing, ctHeightSpacing;
     switch (m_type) {
     case AimLibDefine::ViewNameEnum::E_AXIAL: {
@@ -204,13 +209,13 @@ void GlWdgImpl::showCenter(QVector3D p)
     }
 
     float unitView;// unitWidthView, unitHeightView;
-    if (ct_width > ct_height)//ÒÔ×î´óµÄÎªÖ÷
+    if (ct_width > ct_height)//ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Îªï¿½ï¿½
     {
-        unitView = ct_height / m_scale / m_glRect.height();//µ¥Î»ÊÓÍ¼Óë¾àÀë±ÈÀı
+        unitView = ct_height / m_scale / m_glRect.height();//ï¿½ï¿½Î»ï¿½ï¿½Í¼ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
     }
     else
     {
-        unitView = ct_width / m_scale / m_glRect.width();//µ¥Î»ÊÓÍ¼Óë¾àÀë±ÈÀı
+        unitView = ct_width / m_scale / m_glRect.width();//ï¿½ï¿½Î»ï¿½ï¿½Í¼ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
     }
 
     float x = 0, y = 0;
@@ -240,7 +245,7 @@ void GlWdgImpl::showCenter(QVector3D p)
     x = std::max(0.0f, x - m_glRect.x() - m_glRect.width() / 2);
     y = std::max(0.0f, y - m_glRect.y() - m_glRect.height() / 2);
 
-    //ÉèÖÃÎ»ÖÃ½«ÆäÒÆ¶¯µ½
+    //ï¿½ï¿½ï¿½ï¿½Î»ï¿½Ã½ï¿½ï¿½ï¿½ï¿½Æ¶ï¿½ï¿½ï¿½
     ImgVmFactory::stGetInstance()->setViewRect(m_type, QRect(x * unitView / ctWidthSpacing, y * unitView / ctHeightSpacing, 0, 0));
 }
 
@@ -256,8 +261,8 @@ QVector3D GlWdgImpl::pointFromGlToSpace(QPoint p) {
     auto xspace = dicom.xSpacing;
     auto yspace = dicom.ySpacing;
     auto zspace = dicom.zSpacing;
-    //¼ÆËãÊÓÍ¼±ÈÀı
-    std::vector<double> imgPos = pCtInfo->pCtInfo->pSliceInfo->imgPosition;//Ô­µã×öÁË±ä¶¯
+    //ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Í¼ï¿½ï¿½ï¿½ï¿½
+    std::vector<double> imgPos = pCtInfo->pCtInfo->pSliceInfo->imgPosition;//Ô­ï¿½ï¿½ï¿½ï¿½ï¿½Ë±ä¶¯
     float ct_width, ct_height, ctWidthSpacing, ctHeightSpacing;
     switch (m_type) {
     case AimLibDefine::ViewNameEnum::E_AXIAL: {
@@ -288,14 +293,14 @@ QVector3D GlWdgImpl::pointFromGlToSpace(QPoint p) {
         break;
     }
     float unitView;// , unitHeightView;
-    if (ct_width > ct_height)//ÒÔ×î´óµÄÎªÖ÷
+    if (ct_width > ct_height)//ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Îªï¿½ï¿½
     {
-        unitView = ct_height / m_scale / m_glRect.height();//µ¥Î»ÊÓÍ¼Óë¾àÀë±ÈÀı
+        unitView = ct_height / m_scale / m_glRect.height();//ï¿½ï¿½Î»ï¿½ï¿½Í¼ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
         //unitWidthView = m_glRect.width() * unitHeightView/;
     }
     else
     {
-        unitView = ct_width / m_scale / m_glRect.width();//µ¥Î»ÊÓÍ¼Óë¾àÀë±ÈÀı
+        unitView = ct_width / m_scale / m_glRect.width();//ï¿½ï¿½Î»ï¿½ï¿½Í¼ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
         //unitHeightView = unitWidthView / ctWidthSpacing * ctHeightSpacing;
     }
     float x = realpoint.x() * unitView;
@@ -340,7 +345,7 @@ QPoint GlWdgImpl::pointFromSpaceToGl(QVector3D p) {
     auto yspace = dicom.ySpacing;
     auto zspace = dicom.zSpacing;
 
-    std::vector<double> imgPos = pCtInfo->pCtInfo->pSliceInfo->imgPosition;//Ô­µã×öÁË±ä¶¯
+    std::vector<double> imgPos = pCtInfo->pCtInfo->pSliceInfo->imgPosition;//Ô­ï¿½ï¿½ï¿½ï¿½ï¿½Ë±ä¶¯
     float ct_width, ct_height, ctWidthSpacing, ctHeightSpacing;
     switch (m_type) {
     case AimLibDefine::ViewNameEnum::E_AXIAL: {
@@ -371,13 +376,13 @@ QPoint GlWdgImpl::pointFromSpaceToGl(QVector3D p) {
         break;
     }
     float unitView;// unitWidthView, unitHeightView;
-    if (ct_width > ct_height)//ÒÔ×î´óµÄÎªÖ÷
+    if (ct_width > ct_height)//ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Îªï¿½ï¿½
     {
-        unitView = ct_height / m_scale / m_glRect.height();//µ¥Î»ÊÓÍ¼Óë¾àÀë±ÈÀı
+        unitView = ct_height / m_scale / m_glRect.height();//ï¿½ï¿½Î»ï¿½ï¿½Í¼ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
     }
     else
     {
-        unitView = ct_width / m_scale / m_glRect.width();//µ¥Î»ÊÓÍ¼Óë¾àÀë±ÈÀı
+        unitView = ct_width / m_scale / m_glRect.width();//ï¿½ï¿½Î»ï¿½ï¿½Í¼ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
     }
 
     float x = 0, y = 0;
@@ -405,7 +410,7 @@ QPoint GlWdgImpl::pointFromSpaceToGl(QVector3D p) {
     }
 
     QPoint realpoint = QPoint(std::round(x) + m_glRect.x(), std::round(y) + m_glRect.y());
-    //¼ÓÉÏÆ½ÒÆ
+    //ï¿½ï¿½ï¿½ï¿½Æ½ï¿½ï¿½
     return realpoint;
 }
 
@@ -420,7 +425,7 @@ int GlWdgImpl::pointFromSpaceToImgIndex(QVector3D p) {
     auto yspace = dicom.ySpacing;
     auto zspace = dicom.zSpacing;
 
-    std::vector<double> imgPos = pCtInfo->pCtInfo->pSliceInfo->imgPosition;//Ô­µã×öÁË±ä¶¯
+    std::vector<double> imgPos = pCtInfo->pCtInfo->pSliceInfo->imgPosition;//Ô­ï¿½ï¿½ï¿½ï¿½ï¿½Ë±ä¶¯
     double relativateX, relativateY, relativateZ;
     relativateX = (p.x() - imgPos[0]);
     relativateY = (p.y() - imgPos[1]);
@@ -551,17 +556,97 @@ void GlWdgImpl::flash() {
 void GlWdgImpl::clearWdg() {
 }
 
+// æ–°å¢ï¼šåˆå§‹åŒ–è§†å›¾ä¸­å¿ƒ
+void GlWdgImpl::initializeViewCenter() {
+    if (!ImgVmFactory::stGetInstance()->getCtInfo() || !ImgVmFactory::stGetInstance()->getCtInfo()->pCtInfo)
+        return;
+        
+    auto dicom = ImgVmFactory::stGetInstance()->getCtInfo()->pCtInfo->dicoms[m_type];
+    // å°†è§†å›¾ä¸­å¿ƒè®¾ç½®ä¸ºå›¾åƒä¸­å¿ƒ
+    m_viewCenter = QPointF(dicom.width / 2.0, dicom.height / 2.0);
+}
+
+// æ–°å¢ï¼šæ ¹æ®å˜æ¢å‚æ•°è®¡ç®—viewRect
+QRect GlWdgImpl::calculateViewRect() {
+    if (!ImgVmFactory::stGetInstance()->getCtInfo() || !ImgVmFactory::stGetInstance()->getCtInfo()->pCtInfo)
+        return QRect(0, 0, 0, 0);
+        
+    auto dicom = ImgVmFactory::stGetInstance()->getCtInfo()->pCtInfo->dicoms[m_type];
+    
+    // è®¡ç®—å•ä½è§†å›¾
+    float ct_width, ct_height, ctWidthSpacing, ctHeightSpacing;
+    switch (m_type) {
+    case AimLibDefine::ViewNameEnum::E_AXIAL:
+        ct_width = (dicom.width - 1) * dicom.xSpacing;
+        ct_height = (dicom.height - 1) * dicom.ySpacing;
+        ctWidthSpacing = dicom.xSpacing;
+        ctHeightSpacing = dicom.ySpacing;
+        break;
+    case AimLibDefine::ViewNameEnum::E_CORONAL:
+        ct_width = (dicom.width - 1) * dicom.xSpacing;
+        ct_height = (dicom.height - 1) * dicom.zSpacing;
+        ctWidthSpacing = dicom.xSpacing;
+        ctHeightSpacing = dicom.zSpacing;
+        break;
+    case AimLibDefine::ViewNameEnum::E_SAGITTAL:
+        ct_width = (dicom.width - 1) * dicom.ySpacing;
+        ct_height = (dicom.height - 1) * dicom.zSpacing;
+        ctWidthSpacing = dicom.ySpacing;
+        ctHeightSpacing = dicom.zSpacing;
+        break;
+    default:
+        return QRect(0, 0, 0, 0);
+    }
+    
+    float unitView;
+    if (ct_width > ct_height) {
+        unitView = ct_height / m_zoomFactor / m_glRect.height();
+    } else {
+        unitView = ct_width / m_zoomFactor / m_glRect.width();
+    }
+    
+    // è®¡ç®—å½“å‰è§†å›¾ä¸­å¿ƒåº”è¯¥å¯¹åº”çš„å›¾åƒèµ·å§‹ä½ç½®
+    float centerOffsetX = (m_glRect.width() / 2.0) * unitView / ctWidthSpacing;
+    float centerOffsetY = (m_glRect.height() / 2.0) * unitView / ctHeightSpacing;
+    
+    // è€ƒè™‘å¹³ç§»åç§»
+    int viewX = m_viewCenter.x() - centerOffsetX + m_panOffset.x();
+    int viewY = m_viewCenter.y() - centerOffsetY + m_panOffset.y();
+    
+    // è¾¹ç•Œæ£€æŸ¥
+    viewX = std::max(0, std::min(viewX, dicom.width - 1));
+    viewY = std::max(0, std::min(viewY, dicom.height - 1));
+    
+    return QRect(viewX, viewY, 0, 0);  // widthå’Œheightä¿æŒåŸå€¼
+}
+
+// æ–°å¢ï¼šæ›´æ–°è§†å›¾å˜æ¢
+void GlWdgImpl::updateViewTransform() {
+    QRect currentViewRect = ImgVmFactory::stGetInstance()->getViewRect(m_type);
+    QRect newViewRect = calculateViewRect();
+    
+    // æ›´æ–°viewRectï¼Œä¿æŒwidthå’Œheightä¸å˜
+    ImgVmFactory::stGetInstance()->setViewRect(m_type, 
+        newViewRect.x(), newViewRect.y(), 
+        currentViewRect.width(), currentViewRect.height());
+    
+    // ä¿æŒå…¼å®¹æ€§
+    m_scale = m_zoomFactor;
+}
+
 void GlWdgImpl::scale(double v) {
-    m_scale = v;
+    // ä½¿ç”¨æ–°çš„å˜æ¢ç³»ç»Ÿ
+    m_zoomFactor = v;
+    updateViewTransform();
     update();
 }
 
 void GlWdgImpl::translate(QPoint translate)
 {
+    // ä½¿ç”¨æ–°çš„å˜æ¢ç³»ç»Ÿ
     m_translate = translate;
-    QRect viewRect = ImgVmFactory::stGetInstance()->getViewRect(m_type);
-
-    ImgVmFactory::stGetInstance()->setViewRect(m_type, std::max(viewRect.x() - m_translate.x(), 0), std::max(viewRect.y() - m_translate.y(), 0), viewRect.width(), viewRect.height());
+    m_panOffset += QPointF(translate.x(), translate.y());
+    updateViewTransform();
     update();
 }
 
@@ -600,13 +685,20 @@ void GlWdgImpl::paintEvent(QPaintEvent* event) {
     if (!ImgVmFactory::stGetInstance()->getCtInfo() || !ImgVmFactory::stGetInstance()->getCtInfo()->pCtInfo)
         return;
 
-    //»ñÈ¡CTÊı¾İ
+    //ï¿½ï¿½È¡CTï¿½ï¿½ï¿½ï¿½
     AimLibDefine::CtInfo* pCtInfo = ImgVmFactory::stGetInstance()->getCtInfo()->pCtInfo;
     auto dicom = pCtInfo->dicoms[m_type];
     AimLibDefine::DSR_SliceVolumeInfo* pCtSlice = pCtInfo->pSliceInfo;
     signed short* pCTData = pCtSlice->ptrData;
 
     m_curIndex = std::min(dicom.total - 1, std::max(0, m_curIndex));
+    
+    // åˆå§‹åŒ–è§†å›¾ä¸­å¿ƒï¼ˆä»…åœ¨ç¬¬ä¸€æ¬¡æˆ–è§†å›¾ä¸­å¿ƒæœªè®¾ç½®æ—¶ï¼‰
+    static bool viewCenterInitialized = false;
+    if (!viewCenterInitialized || (m_viewCenter.x() == 0 && m_viewCenter.y() == 0)) {
+        initializeViewCenter();
+        viewCenterInitialized = true;
+    }
 
     int glRectWidth = this->width() - 144, glRectHeight = this->height() - 67;
     if (m_glRect.width() != 0 && m_glRect.width() < glRectWidth)
@@ -618,8 +710,8 @@ void GlWdgImpl::paintEvent(QPaintEvent* event) {
         full_ratio = 1.0;
     }
 
-    m_glRect = QRect(90, 30, glRectWidth, glRectHeight);//×Ô¶¨Òå×î´ó´°¿Ú
-    //ĞèÒª¿¼ÂÇÍ¼Ïñ¿Õ¼ä±ÈÀı
+    m_glRect = QRect(90, 30, glRectWidth, glRectHeight);//ï¿½Ô¶ï¿½ï¿½ï¿½ï¿½ï¿½ó´°¿ï¿½
+    //ï¿½ï¿½Òªï¿½ï¿½ï¿½ï¿½Í¼ï¿½ï¿½Õ¼ï¿½ï¿½ï¿½ï¿½
     float ct_width, ct_height, ctWidthSpacing, ctHeightSpacing;
     switch (m_type) {
     case AimLibDefine::ViewNameEnum::E_AXIAL: {
@@ -644,7 +736,7 @@ void GlWdgImpl::paintEvent(QPaintEvent* event) {
         break;
     }
 
-    //»æÖÆ±êÇ©¶ÔÓ¦ÑÕÉ«£¬È¨ÏŞ×î´ó
+    //ï¿½ï¿½ï¿½Æ±ï¿½Ç©ï¿½ï¿½Ó¦ï¿½ï¿½É«ï¿½ï¿½È¨ï¿½ï¿½ï¿½ï¿½ï¿½
     InterfaceImgLoaderVm* pLabel2ColorIns = ImgVmFactory::stGetLabel2ColorInstance();
     const AimLibDefine::ImgInfo* pLabel2ColorInfo = pLabel2ColorIns->getCtInfo();
     bool label2colorInfo = false;
@@ -658,7 +750,7 @@ void GlWdgImpl::paintEvent(QPaintEvent* event) {
         }
     }
 
-    //¼ÆËã´°¿í´°Î»Çø¼ä
+    //ï¿½ï¿½ï¿½ã´°ï¿½ï¿½ï¿½ï¿½Î»ï¿½ï¿½ï¿½ï¿½
     double Min;
     double Max;
     qint16 uWC;
@@ -676,7 +768,7 @@ void GlWdgImpl::paintEvent(QPaintEvent* event) {
         Max = uWC + uWW / 2.0;
     }
 
-    // »ñÈ¡µ±Ç°ÒªäÖÈ¾µÄÍ¼Ïñ/ÈÚºÏÍ¼Ïñ
+    // ï¿½ï¿½È¡ï¿½ï¿½Ç°Òªï¿½ï¿½È¾ï¿½ï¿½Í¼ï¿½ï¿½/ï¿½Úºï¿½Í¼ï¿½ï¿½
     std::unique_lock<std::mutex> lk(m_loadCtMtx);
 
     int labelValue;
@@ -685,39 +777,39 @@ void GlWdgImpl::paintEvent(QPaintEvent* event) {
 
     QRect viewRect = ImgVmFactory::stGetInstance()->getViewRect(m_type);
 
-    //ĞèÒª¸ù¾İ¶¨ÒåµÄspacing£¬·´ÏòÍÆ¶ÏÍ¼Ïñ´óĞ¡
+    //ï¿½ï¿½Òªï¿½ï¿½ï¿½İ¶ï¿½ï¿½ï¿½ï¿½spacingï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Æ¶ï¿½Í¼ï¿½ï¿½ï¿½Ğ¡
     int img_width, img_height;
-    if (ct_width > ct_height)//ÒÔ×î´óµÄÎªÖ÷
+    if (ct_width > ct_height)//ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Îªï¿½ï¿½
     {
-        m_unitView = ct_height / m_scale / m_glRect.height();//µ¥Î»ÊÓÍ¼Óë¾àÀë±ÈÀı
-        //¼ÆËãÏñËØ´óĞ¡
-        img_height = dicom.height / m_scale;//£¬ÒÔ×î´óÎªÖ÷£¬°´ÕÕµÈ±ÈÀıËõ·Å
+        m_unitView = ct_height / m_scale / m_glRect.height();//ï¿½ï¿½Î»ï¿½ï¿½Í¼ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
+        //ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ø´ï¿½Ğ¡
+        img_height = dicom.height / m_scale;//ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Îªï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ÕµÈ±ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
         img_width = int(m_glRect.width() * m_unitView / ctWidthSpacing);
 
-        //¼ÆËãÍ¼ÏñÊÓÍ¼¿í¸ß
-        m_imgRct = QRect(m_glRect.x(), m_glRect.y(), m_glRect.width(), m_glRect.height());//Í¼ÏñËõ·Å±ÈÀı
+        //ï¿½ï¿½ï¿½ï¿½Í¼ï¿½ï¿½ï¿½ï¿½Í¼ï¿½ï¿½ï¿½ï¿½
+        m_imgRct = QRect(m_glRect.x(), m_glRect.y(), m_glRect.width(), m_glRect.height());//Í¼ï¿½ï¿½ï¿½ï¿½ï¿½Å±ï¿½ï¿½ï¿½
     }
     else
     {
-        m_unitView = ct_width / m_scale / m_glRect.width();//µ¥Î»ÊÓÍ¼Óë¾àÀë±ÈÀı
-        //¼ÆËãÏñËØ´óĞ¡
-        img_width = dicom.width / m_scale;//£¬ÒÔ×î´óÎªÖ÷£¬°´ÕÕµÈ±ÈÀıËõ·Å
+        m_unitView = ct_width / m_scale / m_glRect.width();//ï¿½ï¿½Î»ï¿½ï¿½Í¼ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
+        //ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ø´ï¿½Ğ¡
+        img_width = dicom.width / m_scale;//ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Îªï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ÕµÈ±ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
         img_height = int(m_glRect.height() * m_unitView / ctHeightSpacing);
 
-        //¼ÆËãÍ¼ÏñÊÓÍ¼¿í¸ß
-        m_imgRct = QRect(m_glRect.x(), m_glRect.y(), m_glRect.width(), m_glRect.height());//Í¼ÏñËõ·Å±ÈÀı
+        //ï¿½ï¿½ï¿½ï¿½Í¼ï¿½ï¿½ï¿½ï¿½Í¼ï¿½ï¿½ï¿½ï¿½
+        m_imgRct = QRect(m_glRect.x(), m_glRect.y(), m_glRect.width(), m_glRect.height());//Í¼ï¿½ï¿½ï¿½ï¿½ï¿½Å±ï¿½ï¿½ï¿½
     }
 
-    //²»Òª±éÀúÈ«²¿£¬Ö»ĞèÒªÔöÁ¿ĞŞ¸ÄÍ¼ÏñÊı¾İ
+    //ï¿½ï¿½Òªï¿½ï¿½ï¿½ï¿½È«ï¿½ï¿½ï¿½ï¿½Ö»ï¿½ï¿½Òªï¿½ï¿½ï¿½ï¿½ï¿½Ş¸ï¿½Í¼ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
     int iterHeight = std::min(img_height, dicom.height);
     int iterWidth = std::min(img_width, dicom.width);
 
-    //Ö»ĞèÒª±£Ö¤ÔöÁ¿Ñ­»·´¦Àí£¬ÊÇ´ÓÍ¼ÏñÎ»ÖÃÉÏ¿ªÊ¼Ñ­»·
+    //Ö»ï¿½ï¿½Òªï¿½ï¿½Ö¤ï¿½ï¿½ï¿½ï¿½Ñ­ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ç´ï¿½Í¼ï¿½ï¿½Î»ï¿½ï¿½ï¿½Ï¿ï¿½Ê¼Ñ­ï¿½ï¿½
     int iterx = std::max(viewRect.x(), 0);
     int itery = std::max(viewRect.y(), 0);
 
     m_curQImg = QImage(img_width, img_height, QImage::Format_RGB32);
-    m_curQImg.fill(qRgb(0, 0, 0));//Ä¬ÈÏÌî³äÎª0
+    m_curQImg.fill(qRgb(0, 0, 0));//Ä¬ï¿½ï¿½ï¿½ï¿½ï¿½Îª0
 
     iterHeight = std::min(dicom.height, iterHeight + itery);
     iterWidth = std::min(dicom.width, iterWidth + iterx);
@@ -732,24 +824,24 @@ void GlWdgImpl::paintEvent(QPaintEvent* event) {
                 int x1 = x - viewRect.x();
                 int y1 = y - viewRect.y();
 
-                //»ñÈ¡CtÖµ
-                signed short ctData = pCTData[zlocation + y * dicom.width + x];	//½«ĞòÁĞÖ®ºóµÄÄÚ´æÖµ¸³¸ødata
+                //ï¿½ï¿½È¡CtÖµ
+                signed short ctData = pCTData[zlocation + y * dicom.width + x];	//ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ö®ï¿½ï¿½ï¿½ï¿½Ú´ï¿½Öµï¿½ï¿½ï¿½ï¿½data
                 int16_t pixelValue;
                 if (isUsingHURange)
                 {
                     float range = m_curMaxHU - m_curMinHU;
-                    if (range <= 0) range = 1.0f;  // ±ÜÃâ³ıÒÔÁã
+                    if (range <= 0) range = 1.0f;  // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
                     float temp1 = (ctData - m_curMinHU) * 255.0f / range;
                     pixelValue = DataMinMax(temp1);
                 }
                 else
                 {
                     float temp1 = (ctData - Min) * 255.0f / (Max - Min);
-                    // ½«Ó³ÉäºóµÄÖµ·ÅÈë»º³åÇø
+                    // ï¿½ï¿½Ó³ï¿½ï¿½ï¿½ï¿½Öµï¿½ï¿½ï¿½ë»ºï¿½ï¿½ï¿½ï¿½
                     pixelValue = DataMinMax(temp1);
                 }
                 ctVecData.emplace_back(pixelValue);
-                //»ñÈ¡LabelÖµ
+                //ï¿½ï¿½È¡LabelÖµ
                 if (label2colorInfo)
                 {
                     labelValue = pLabelData[zlocation + y * dicom.width + x];
@@ -791,17 +883,17 @@ void GlWdgImpl::paintEvent(QPaintEvent* event) {
                 if (isUsingHURange)
                 {
                     float range = m_curMaxHU - m_curMinHU;
-                    if (range <= 0) range = 1.0f;  // ±ÜÃâ³ıÒÔÁã
+                    if (range <= 0) range = 1.0f;  // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
                     float temp1 = (ctData - m_curMinHU) * 255.0f / range;
                     pixelValue = DataMinMax(temp1);
                 }
                 else
                 {
                     float temp1 = (ctData - Min) * 255.0f / (Max - Min);
-                    // ½«Ó³ÉäºóµÄÖµ·ÅÈë»º³åÇø
+                    // ï¿½ï¿½Ó³ï¿½ï¿½ï¿½ï¿½Öµï¿½ï¿½ï¿½ë»ºï¿½ï¿½ï¿½ï¿½
                     pixelValue = DataMinMax(temp1);
                 }
-                //×ÅÉ«ÇÒ±³¾°²»Îª0
+                //ï¿½ï¿½É«ï¿½Ò±ï¿½ï¿½ï¿½ï¿½ï¿½Îª0
                 if (label2colorInfo)
                 {
                     labelValue = pLabelData[(dicom.height - 1 - y) * locationx + locationy + x];
@@ -839,18 +931,18 @@ void GlWdgImpl::paintEvent(QPaintEvent* event) {
                 if (isUsingHURange)
                 {
                     float range = m_curMaxHU - m_curMinHU;
-                    if (range <= 0) range = 1.0f;  // ±ÜÃâ³ıÒÔÁã
+                    if (range <= 0) range = 1.0f;  // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
                     float temp1 = (ctData - m_curMinHU) * 255.0f / range;
                     pixelValue = DataMinMax(temp1);
                 }
                 else
                 {
                     float temp1 = (ctData - Min) * 255.0f / (Max - Min);
-                    // ½«Ó³ÉäºóµÄÖµ·ÅÈë»º³åÇø
+                    // ï¿½ï¿½Ó³ï¿½ï¿½ï¿½ï¿½Öµï¿½ï¿½ï¿½ë»ºï¿½ï¿½ï¿½ï¿½
                     pixelValue = DataMinMax(temp1);
                 }
 
-                //×ÅÉ«ÇÒ±³¾°²»Îª0
+                //ï¿½ï¿½É«ï¿½Ò±ï¿½ï¿½ï¿½ï¿½ï¿½Îª0
                 if (label2colorInfo)
                 {
                     labelValue = pLabelData[locationx * (dicom.height - y - 1) + m_curIndex + dicom.total * x];
@@ -879,15 +971,15 @@ void GlWdgImpl::paintEvent(QPaintEvent* event) {
     {
         return;
     }
-    // Æ½ÒÆ
+    // Æ½ï¿½ï¿½
     //paint.translate(m_translate.x(), m_translate.y());
 
-    // Ëõ·Å
+    // ï¿½ï¿½ï¿½ï¿½
     //paint.scale(m_scale, m_scale);
     paint.setOpacity(1.0);
     paint.drawImage(m_imgRct, m_curQImg);
 
-    // Éú³É¸ßÁÁÇøÓò
+    // ï¿½ï¿½ï¿½É¸ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
     /*if (drawHighLightRegion())
     {
         paint.setOpacity(m_highLightOpacity);
@@ -911,7 +1003,7 @@ void GlWdgImpl::paintEvent(QPaintEvent* event) {
 
         }
         });
-    //»æÖÆÎÄ×Ö
+    //ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
     for (auto item : m_drawText)
     {
         drawText(&paint, item);
@@ -919,7 +1011,7 @@ void GlWdgImpl::paintEvent(QPaintEvent* event) {
 
     if (InteractiveMode)
     {
-        //Êµ¼Ê³¤¶ÈĞèÒª×ª³É¶şÎ¬×ø±ê³¤¶È
+        //Êµï¿½Ê³ï¿½ï¿½ï¿½ï¿½ï¿½Òª×ªï¿½É¶ï¿½Î¬ï¿½ï¿½ï¿½ê³¤ï¿½ï¿½
         float centerradiuradio = curradius * full_ratio;
         QVector3D leftCenterPoint = QVector3D(curcenter.x() + centerradiuradio, curcenter.y(), curcenter.z());
         QVector3D rightCenterPoint = QVector3D(curcenter.x() - centerradiuradio, curcenter.y(), curcenter.z());
@@ -941,7 +1033,7 @@ void GlWdgImpl::paintEvent(QPaintEvent* event) {
         paint.setPen(pen);
         paint.drawPoint(centerPoint);
     }
-    else//Ê®×Ö²æ
+    else//Ê®ï¿½Ö²ï¿½
     {
         QPoint centerPoint = pointFromSpaceToGl(curcenter);
         int linelength = 15;
@@ -1076,7 +1168,7 @@ void GlWdgImpl::drawText(QPainter* painter, TextInfo& info)
 
 void GlWdgImpl::drawTag(QPainter* painter)
 {
-    // ×óÉÏ½ÇµÄ½ØÃæÀàĞÍ
+    // ï¿½ï¿½ï¿½Ï½ÇµÄ½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
     //auto typeStrRect = QRect(15, 15, 166, 25);
     //auto indexStrRect = QRect(15, 50, 266, 25);
     ////paint.fillRect(typeStrRect, QColor(23, 23, 255));
@@ -1143,15 +1235,15 @@ void GlWdgImpl::drawTag(QPainter* painter)
     //}
     //Utils::drawTextEx(painter, typeStr, typeStrRect, QColor("#CAE1FB"), 18, QFont::Bold, QTextOption(Qt::AlignLeft | Qt::AlignVCenter));
 
-    //// »æÖÆµ±Ç°ÇĞÆ¬±àºÅ
+    //// ï¿½ï¿½ï¿½Æµï¿½Ç°ï¿½ï¿½Æ¬ï¿½ï¿½ï¿½
     //QString indexStr = QString("%1/%2").arg(m_curIndex).arg(totalSize);
     //Utils::drawTextEx(painter, indexStr, indexStrRect, QColor("#C7C9D0"), 18, QFont::Bold, QTextOption(Qt::AlignLeft | Qt::AlignVCenter));
 
-    //// »æÖÆµ±Ç°±êÊ¶Ïß
+    //// ï¿½ï¿½ï¿½Æµï¿½Ç°ï¿½ï¿½Ê¶ï¿½ï¿½
     //drawLine(painter, lineX);
     //drawLine(painter, lineY);
 
-    //// »æÖÆµ±Ç°Ö¸Ê¾·½Ïò
+    //// ï¿½ï¿½ï¿½Æµï¿½Ç°Ö¸Ê¾ï¿½ï¿½ï¿½ï¿½
     //Utils::drawTextEx(painter, axesX, QRect(lineX.p2.x() < 30 ? lineX.p2.x() : lineX.p2.x() - 30, lineX.p2.y() < 30 ? lineX.p2.y() : lineX.p2.y() - 30, 30, 30),
     //	QColor("#FFBF00"), 18, QFont::Bold, QTextOption(Qt::AlignCenter));
     //Utils::drawTextEx(painter, axesY, QRect(lineY.p1.x() < 30 ? lineY.p1.x() : lineY.p1.x() - 30, lineY.p1.y() < 30 ? lineY.p1.y() : lineY.p1.y() - 30, 30, 30),
@@ -1160,7 +1252,7 @@ void GlWdgImpl::drawTag(QPainter* painter)
 
 bool GlWdgImpl::drawHighLightRegion()
 {
-    // Éú³É¸ßÁÁÇøÓò
+    // ï¿½ï¿½ï¿½É¸ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 /*	if (m_highLightValue > 0 && ImgVmFactory::stGetInstance()->getCtInfo()->pCtInfo->pSliceInfo->modality == "REGION")
     {
         m_curMask = QImage(m_curQImg.size(), QImage::Format_RGBA8888);
@@ -1246,17 +1338,17 @@ QPainterPath GlWdgImpl::createClosedCurveWithTension(const QVector<QPointF>& poi
     QPainterPath path;
     if (points.size() < 2) return path;
 
-    // À©Õ¹µã¼¯Ê¹ÇúÏß±ÕºÏ
+    // ï¿½ï¿½Õ¹ï¿½ã¼¯Ê¹ï¿½ï¿½ï¿½ß±Õºï¿½
     QVector<QPointF> extendedPoints;
     extendedPoints.reserve(points.size() + 3);
-    extendedPoints << points.last(); // Ìí¼Ó×îºóÒ»¸öµã×÷ÎªÆğÊ¼
-    extendedPoints << points;        // Ìí¼ÓÔ­Ê¼µã¼¯
-    extendedPoints << points.first() << points[1]; // Ìí¼ÓÊ×Á½¸öµã×÷Îª½áÎ²
+    extendedPoints << points.last(); // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ò»ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Îªï¿½ï¿½Ê¼
+    extendedPoints << points;        // ï¿½ï¿½ï¿½ï¿½Ô­Ê¼ï¿½ã¼¯
+    extendedPoints << points.first() << points[1]; // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Îªï¿½ï¿½Î²
 
-    // ÒÆ¶¯µ½µÚÒ»¸öµã
+    // ï¿½Æ¶ï¿½ï¿½ï¿½ï¿½ï¿½Ò»ï¿½ï¿½ï¿½ï¿½
     path.moveTo(points.first());
 
-    // ¼ÆËãÃ¿¶ÎÇúÏß
+    // ï¿½ï¿½ï¿½ï¿½Ã¿ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
     const int n = points.size();
     const double s = (1.0 - tension) / 6.0;
 
@@ -1266,11 +1358,11 @@ QPainterPath GlWdgImpl::createClosedCurveWithTension(const QVector<QPointF>& poi
         const QPointF& p2 = extendedPoints[i + 2];
         const QPointF& p3 = extendedPoints[i + 3];
 
-        // ¼ÆËã±´Èû¶û¿ØÖÆµã
+        // ï¿½ï¿½ï¿½ã±´ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Æµï¿½
         QPointF cp1 = p1 + (p2 - p0) * s;
         QPointF cp2 = p2 - (p3 - p1) * s;
 
-        // Ìí¼ÓÇúÏß¶Î
+        // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ß¶ï¿½
         path.cubicTo(cp1, cp2, p2);
     }
 
@@ -1327,7 +1419,7 @@ QVector3D GlWdgImpl::fromAimglgetSpace(QPoint p) {
     auto xspace = ImgVmFactory::stGetInstance()->getCtInfo()->pCtInfo->pSliceInfo->xSpacing;
     auto yspace = ImgVmFactory::stGetInstance()->getCtInfo()->pCtInfo->pSliceInfo->ySpacing;
     auto zspace = ImgVmFactory::stGetInstance()->getCtInfo()->pCtInfo->pSliceInfo->zSpacing;
-    // ÏÈ½«p°´ÕÕpainterµÄËõ·Å»¹Ô­
+    // ï¿½È½ï¿½pï¿½ï¿½ï¿½ï¿½painterï¿½ï¿½ï¿½ï¿½ï¿½Å»ï¿½Ô­
     auto px = (p.x() - m_translate.x()) / m_scale;
     auto py = (p.y() - m_translate.y()) / m_scale;
     auto w = m_curQImg.width();

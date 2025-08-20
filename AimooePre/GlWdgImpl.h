@@ -13,25 +13,25 @@
 #include "view/gl/base/GlWdgBase.h"
 #include "component/register-time/RegisterTimer.h"
 
-// µãĞÅÏ¢
+// ï¿½ï¿½ï¿½ï¿½Ï¢
 struct PointInfo {
     QVector3D p;
     QColor clr;
-    // °ë¾¶
+    // ï¿½ë¾¶
     float r = 0.0;
 };
 
-// Ïß¶ÎĞÅÏ¢
+// ï¿½ß¶ï¿½ï¿½ï¿½Ï¢
 struct LineInfo {
     QVector3D p1;
     QVector3D p2;
     float width = 1.0;
     QColor clr;
-    // ĞéÏß 
+    // ï¿½ï¿½ï¿½ï¿½ 
     bool bDash = false;
 };
 
-// ¶à±ßĞÎĞÅÏ¢
+// ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ï¢
 struct PolygonInfo {
     std::vector<QVector3D> ps;
     float width = 1.0;
@@ -39,7 +39,7 @@ struct PolygonInfo {
     QColor brushClr;
 };
 
-// ÇúÏßĞÅÏ¢
+// ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ï¢
 struct CurveInfo {
     std::vector<QVector3D> ps;
     float width = 1.0;
@@ -59,7 +59,7 @@ struct TextInfo {
     QTextOption to = QTextOption(Qt::AlignHCenter | Qt::AlignVCenter);
 };
 
-// »æÖÆÀàĞÍ
+// ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 enum DrawType {
     DT_Point = 0,
     DT_Line,
@@ -68,7 +68,7 @@ enum DrawType {
     DT_Max
 };
 
-// »æÖÆĞÅÏ¢
+// ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ï¢
 struct DrawInfo {
     DrawType type = DT_Max;
     union Info {
@@ -88,106 +88,106 @@ public:
 
     std::vector<DrawInfo*> getDrawInfos();
 
-    virtual int fromSpaceGetIndex(QVector3D p);  //»ñÈ¡Ë÷ÒıĞÅÏ¢
+    virtual int fromSpaceGetIndex(QVector3D p);  //ï¿½ï¿½È¡ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ï¢
 
     virtual QRect getCurRect();
 
     /**
-    * ÕæÊµ¾àÀë/ÊÓÍ¼µÄ±ÈÀı
+    * ï¿½ï¿½Êµï¿½ï¿½ï¿½ï¿½/ï¿½ï¿½Í¼ï¿½Ä±ï¿½ï¿½ï¿½
     */
     virtual float getUnitView();
 
     /**
-    *½«µãÏÔÊ¾ÔÚÖĞĞÄÎ»ÖÃ
+    *ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ê¾ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Î»ï¿½ï¿½
     */
     virtual void showCenter(QVector3D point);
 
     /**
-    * ¶şÎ¬ÊÓÍ¼ÀàĞÍ
+    * ï¿½ï¿½Î¬ï¿½ï¿½Í¼ï¿½ï¿½ï¿½ï¿½
     */
     virtual void setGlWidgetType(AimLibDefine::ViewNameEnum type);
     virtual AimLibDefine::ViewNameEnum getGlWidgetType();
 
     /**
-    * ÉèÖÃctÓ°ÏñÊı¾İĞòºÅ
+    * ï¿½ï¿½ï¿½ï¿½ctÓ°ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
     */
     virtual bool loadCtInfo(int index);
 
     /**
-     * ÉèÖÃµ±Ç°´°¿ÚµÄ´°¿í´°Î».
+     * ï¿½ï¿½ï¿½Ãµï¿½Ç°ï¿½ï¿½ï¿½ÚµÄ´ï¿½ï¿½ï¿½ï¿½ï¿½Î».
      */
     virtual bool setWindowWC(int windowWidth, int windowCenter);
     virtual bool getWindowWC(int& windowWidth, int& windowCenter);
     virtual bool getInitWindowWC(int& windowWidth, int& windowCenter);
     virtual bool setMinMaxHU(int minHu, int maxHU, bool isUsing);
     /**
-     * ÉèÖÃÍ¼ÏñÈÚºÏÍ¸Ã÷¶È.
+     * ï¿½ï¿½ï¿½ï¿½Í¼ï¿½ï¿½ï¿½Úºï¿½Í¸ï¿½ï¿½ï¿½ï¿½.
      */
     virtual void setFusionRate(double origRate, double fusionRate);
 
     /**
-    * ½«´°¿Úµã»÷µÄ×ø±ê£¬×ª»»ÎªÓ°Ïñ¿Õ¼ä×ø±ê
+    * ï¿½ï¿½ï¿½ï¿½ï¿½Úµï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ê£¬×ªï¿½ï¿½ÎªÓ°ï¿½ï¿½Õ¼ï¿½ï¿½ï¿½ï¿½ï¿½
     */
     virtual QVector3D pointFromGlToSpace(QPoint p);
     virtual QPoint pointFromSpaceToGl(QVector3D p);
     virtual int pointFromSpaceToImgIndex(QVector3D p);
     /**
-    * »­µã
+    * ï¿½ï¿½ï¿½ï¿½
     */
     virtual void drawPoint(QVector3D point, QColor clr, float r);
 
     /**
-    * »­Ïß
+    * ï¿½ï¿½ï¿½ï¿½
     */
     virtual void drawLine(QVector3D point1, QVector3D point2, QColor clr, float w, bool bDash = false);
 
     /**
-    * »­¶à±ßĞÎ
+    * ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
     */
     virtual void drawPolygon(std::vector<QVector3D> points, QColor penClr, QColor brushClr, float w);
 
     /**
-    * »­·â±ÕÇúÏß
+    * ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
     */
     virtual void drawCurve(std::vector<QVector3D> points, QColor penClr, QColor brushClr, float w, float arc);
 
     virtual bool isPointInCurve(const QVector3D& point);
 
-    //Ğ´×Ö
+    //Ğ´ï¿½ï¿½
     virtual void drawText(QString txt, QVector3D pos, int width, int height, QColor clr, uint fontH, uint weight, QTextOption to);
 
     /**
-    * Çå¿Õ»æÖÆ
+    * ï¿½ï¿½Õ»ï¿½ï¿½ï¿½
     */
     virtual void clear();
 
     /**
-    * Ë¢ĞÂ
+    * Ë¢ï¿½ï¿½
     */
     virtual void flash();
 
     /**
-    * Çå¿ÕËùÓĞÊÓÍ¼
+    * ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Í¼
     */
     virtual void clearWdg();
 
     /**
-    * Ëõ·Å
+    * ï¿½ï¿½ï¿½ï¿½
     */
     virtual void scale(double v);
 
     /**
-     * ÒÆ¶¯.
+     * ï¿½Æ¶ï¿½.
      */
     virtual void translate(QPoint translate);
 
     /**
-    * ÉèÖÃ·ÖÇø¸ßÁÁ±àºÅ0-255.
+    * ï¿½ï¿½ï¿½Ã·ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½0-255.
     */
     virtual void setHighLightValue(int value, QColor color = Qt::green, double Opacity = 0.0);
 
     /**
-     * .ÉèÖÃ·ÖÇø¸ßÁÁ±àºÅ0-255(¶à¸ö·ÖÇø)
+     * .ï¿½ï¿½ï¿½Ã·ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½0-255(ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½)
      */
     virtual void setHighLightValues(QList<int> valueList, QColor color = Qt::green, double Opacity = 0.0);
 
@@ -200,7 +200,12 @@ public:
     virtual bool getInteractiveMode();
 
     virtual bool updateEllipseCenter(QVector3D center);
+    
 private:
+    // æ–°å¢ï¼šå˜æ¢çŸ©é˜µç›¸å…³è¾…åŠ©å‡½æ•°
+    void updateViewTransform();
+    void initializeViewCenter();
+    QRect calculateViewRect();
     void paintEvent(QPaintEvent* event) override;
     void resizeEvent(QResizeEvent* event) override;
     void closeEvent(QCloseEvent* event) override;
@@ -214,8 +219,8 @@ private:
     void drawText(QPainter* painter, TextInfo& info);
     void drawPolygon(QPainter* painter, PolygonInfo& info);
     void drawCurve(QPainter* painter, CurveInfo& info);
-    void drawTag(QPainter* painter);     //»æÖÆÊÓÍ¼µÄ±êÇ©-ÆúÓÃ
-    bool drawHighLightRegion();            //Éú³É¸ßÁÁÇøÓò
+    void drawTag(QPainter* painter);     //ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Í¼ï¿½Ä±ï¿½Ç©-ï¿½ï¿½ï¿½ï¿½
+    bool drawHighLightRegion();            //ï¿½ï¿½ï¿½É¸ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
     QPainterPath createClosedCurveWithTension(
         const QVector<QPointF>& points,
         double tension = 0.5,
@@ -230,11 +235,11 @@ private slots:
 
 private:
     AimLibDefine::ViewNameEnum m_type = AimLibDefine::ViewNameEnum::E_AXIAL;
-    //ÒªäÖÈ¾µÄÍ¼Æ¬
+    //Òªï¿½ï¿½È¾ï¿½ï¿½Í¼Æ¬
     int16* mpCurImgData = nullptr;
     int16* mpCurFusionImgData = nullptr;
     QRect m_imgRct;
-    QRect m_rect;           //µ±Ç°Í¼ÏñÇøÓòÔÚÕû¸ögl´°¿ÚµÄÎ»ÖÃ
+    QRect m_rect;           //ï¿½ï¿½Ç°Í¼ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½glï¿½ï¿½ï¿½Úµï¿½Î»ï¿½ï¿½
     QRect m_glRect;
     QImage m_curQImg;
     QImage m_curFusionImg;
@@ -266,12 +271,17 @@ private:
 
     std::mutex m_loadCtMtx;
 
-    // Ëõ·Å
+    // ï¿½ï¿½ï¿½ï¿½
     double m_scale = 1.0;
     QPoint m_translate = QPoint(0, 0);
     float full_ratio = 1.0;
+    
+    // æ–°å¢ï¼šæ¨¡æ‹Ÿç›¸æœºçš„å˜æ¢å‚æ•°
+    QPointF m_viewCenter = QPointF(0, 0);    // è§†å›¾ä¸­å¿ƒï¼ˆå›¾åƒåƒç´ åæ ‡ï¼‰
+    double m_zoomFactor = 1.0;               // ç¼©æ”¾å› å­
+    QPointF m_panOffset = QPointF(0, 0);     // å¹³ç§»åç§»
 
-    //Í¼Ïñ¿í¸ßµ¥Î»³¤¶È
+    //Í¼ï¿½ï¿½ï¿½ï¿½ßµï¿½Î»ï¿½ï¿½ï¿½ï¿½
     float m_unitView = 0.0;
 
     int m_highLightValue = 0;    // 0-255
@@ -280,23 +290,23 @@ private:
     QColor m_thresholdColor = Qt::blue;
     double m_highLightOpacity = 0.5;
 
-    // ´°¿í´°Î»
+    // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Î»
     double m_windowWidth = 0;
     double m_windowCenter = 0;
 
-    // µ±Ç°ÊÇ·ñĞèÒª×öÍ¼ÏñÈÚºÏ
+    // ï¿½ï¿½Ç°ï¿½Ç·ï¿½ï¿½ï¿½Òªï¿½ï¿½Í¼ï¿½ï¿½ï¿½Úºï¿½
     bool m_bFusion = false;
     double m_needOrigRate = 0.5;
     double m_needFusionRate = 0.5;
     double m_origRate = 0.5;
     double m_fusionRate = 0.5;
 
-    double curradius = 20;  //½»»¥ÇøÓò°ë¾¶
+    double curradius = 20;  //ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ë¾¶
     double needradius = 20;
 
-    bool InteractiveMode = false;  //½»»¥Ä£Ê½
+    bool InteractiveMode = false;  //ï¿½ï¿½ï¿½ï¿½Ä£Ê½
 
-    QVector3D curcenter = QVector3D(0, 0, 0);  //½»»¥ÇøÓòÖĞĞÄ
+    QVector3D curcenter = QVector3D(0, 0, 0);  //ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
     QVector3D needcenter = QVector3D(0, 0, 0);
 
     QPainterPath m_curvePainterPath;
