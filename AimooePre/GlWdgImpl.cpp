@@ -943,9 +943,29 @@ void GlWdgImpl::paintEvent(QPaintEvent* event) {
     // Apply user translation
     paint.translate(m_translate.x(), m_translate.y());
     
-    // Translate back considering image dimensions
-    // This ensures the image is centered when scale = 1.0
-    QRectF scaledRect(-dicom.width / 2.0, -dicom.height / 2.0, dicom.width, dicom.height);
+    // Calculate physical dimensions considering spacing
+    float physicalWidth, physicalHeight;
+    switch (m_type) {
+    case AimLibDefine::ViewNameEnum::E_AXIAL:
+        physicalWidth = dicom.width * dicom.xSpacing;
+        physicalHeight = dicom.height * dicom.ySpacing;
+        break;
+    case AimLibDefine::ViewNameEnum::E_CORONAL:
+        physicalWidth = dicom.width * dicom.xSpacing;
+        physicalHeight = dicom.height * dicom.zSpacing;
+        break;
+    case AimLibDefine::ViewNameEnum::E_SAGITTAL:
+        physicalWidth = dicom.width * dicom.ySpacing;
+        physicalHeight = dicom.height * dicom.zSpacing;
+        break;
+    default:
+        physicalWidth = dicom.width;
+        physicalHeight = dicom.height;
+        break;
+    }
+    
+    // Use physical dimensions for drawing rect to maintain correct aspect ratio
+    QRectF scaledRect(-physicalWidth / 2.0, -physicalHeight / 2.0, physicalWidth, physicalHeight);
     
     paint.setOpacity(1.0);
     
