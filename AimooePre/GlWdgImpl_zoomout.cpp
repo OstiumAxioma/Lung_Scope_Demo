@@ -552,17 +552,35 @@ void GlWdgImpl::clearWdg() {
 }
 
 void GlWdgImpl::scale(double v) {
+    // 获取当前viewRect
+    QRect viewRect = ImgVmFactory::stGetInstance()->getViewRect(m_type);
+    double oldScale = m_scale;
+    
+    // 计算缩放比例变化
+    double scaleFactor = v / oldScale;
+    
+    // 调整viewRect，补偿采样区域大小的变化
+    // 当缩小时(scaleFactor<1)，采样区域变大，需要向左上移动viewRect
+    // 当放大时(scaleFactor>1)，采样区域变小，需要向右下移动viewRect
+    int offsetX = (int)((1.0 - 1.0/scaleFactor) * m_glRect.width() / 2);
+    int offsetY = (int)((1.0 - 1.0/scaleFactor) * m_glRect.height() / 2);
+    
+    int newX = viewRect.x() + offsetX;
+    int newY = viewRect.y() + offsetY;
+    
+    // 更新缩放和viewRect
     m_scale = v;
-    // Do NOT set m_needResample - scaling doesn't require resampling
+    ImgVmFactory::stGetInstance()->setViewRect(m_type, newX, newY, viewRect.width(), viewRect.height());
+    
     update();
 }
 
 void GlWdgImpl::translate(QPoint translate)
 {
-    // Simply update the translation offset and repaint
-    // No longer modify viewRect - translation is handled by QPainter transform
-    m_translate = m_translate + translate;  // Accumulate translation
-    // Do NOT set m_needResample - translation doesn't require resampling
+    m_translate = translate;
+    QRect viewRect = ImgVmFactory::stGetInstance()->getViewRect(m_type);
+
+    ImgVmFactory::stGetInstance()->setViewRect(m_type, std::max(viewRect.x() - m_translate.x(), 0), std::max(viewRect.y() - m_translate.y(), 0), viewRect.width(), viewRect.height());
     update();
 }
 
@@ -593,7 +611,11 @@ void GlWdgImpl::setHighLightValues(QList<int> valueList, QColor color, double op
     update();
 }
 
-void GlWdgImpl::sampleCTData() {
+void GlWdgImpl::paintEvent(QPaintEvent* event) {
+    QPainter paint(this);
+    paint.setRenderHint(QPainter::Antialiasing);
+    paint.setRenderHint(QPainter::SmoothPixmapTransform);
+
     if (!ImgVmFactory::stGetInstance()->getCtInfo() || !ImgVmFactory::stGetInstance()->getCtInfo()->pCtInfo)
         return;
 
@@ -682,32 +704,42 @@ void GlWdgImpl::sampleCTData() {
 
     QRect viewRect = ImgVmFactory::stGetInstance()->getViewRect(m_type);
 
-    // Always create QImage with full CT slice dimensions
-    // No longer adjust image size based on scale
-    int img_width = dicom.width;
-    int img_height = dicom.height;
-    
-    // Calculate unit view for coordinate conversion (but doesn't affect sampling)
+    //��Ҫ���ݶ����spacing�������ƶ�ͼ���С
+    int img_width, img_height;
     if (ct_width > ct_height)//������Ϊ��
     {
         m_unitView = ct_height / m_scale / m_glRect.height();//��λ��ͼ��������
+        //�������ش�С
+        img_height = dicom.height / m_scale;//�������Ϊ�������յȱ�������
+        img_width = int(m_glRect.width() * m_unitView / ctWidthSpacing);
+
+        //����ͼ����ͼ����
+        m_imgRct = QRect(m_glRect.x(), m_glRect.y(), m_glRect.width(), m_glRect.height());//ͼ�����ű���
     }
     else
     {
         m_unitView = ct_width / m_scale / m_glRect.width();//��λ��ͼ��������
+        //�������ش�С
+        img_width = dicom.width / m_scale;//�������Ϊ�������յȱ�������
+        img_height = int(m_glRect.height() * m_unitView / ctHeightSpacing);
+
+        //����ͼ����ͼ����
+        m_imgRct = QRect(m_glRect.x(), m_glRect.y(), m_glRect.width(), m_glRect.height());//ͼ�����ű���
     }
 
-    // Keep drawing area constant
-    m_imgRct = QRect(m_glRect.x(), m_glRect.y(), m_glRect.width(), m_glRect.height());
+    //��Ҫ����ȫ����ֻ��Ҫ�����޸�ͼ������
+    int iterHeight = std::min(img_height, dicom.height);
+    int iterWidth = std::min(img_width, dicom.width);
 
-    // Always sample complete CT slice, not affected by viewRect
-    int iterx = 0;  // Always start from 0
-    int itery = 0;  // Always start from 0
-    int iterHeight = dicom.height;  // Full height
-    int iterWidth = dicom.width;    // Full width
+    //ֻ��Ҫ��֤����ѭ���������Ǵ�ͼ��λ���Ͽ�ʼѭ��
+    int iterx = std::max(viewRect.x(), 0);
+    int itery = std::max(viewRect.y(), 0);
 
     m_curQImg = QImage(img_width, img_height, QImage::Format_RGB32);
     m_curQImg.fill(qRgb(0, 0, 0));//Ĭ�����Ϊ0
+
+    iterHeight = std::min(dicom.height, iterHeight + itery);
+    iterWidth = std::min(dicom.width, iterWidth + iterx);
 
     std::vector<int16> ctVecData;
 
@@ -716,8 +748,8 @@ void GlWdgImpl::sampleCTData() {
         //#pragma omp parallel for collapse(2)
         for (int y = itery; y < iterHeight; ++y) {
             for (int x = iterx; x < iterWidth; ++x) {
-                int x1 = x;  // Use x directly, no longer subtract viewRect
-                int y1 = y;  // Use y directly, no longer subtract viewRect
+                int x1 = x - viewRect.x();
+                int y1 = y - viewRect.y();
 
                 //��ȡCtֵ
                 signed short ctData = pCTData[zlocation + y * dicom.width + x];	//������֮����ڴ�ֵ����data
@@ -771,8 +803,8 @@ void GlWdgImpl::sampleCTData() {
         //#pragma omp parallel for collapse(2)
         for (int y = itery; y < iterHeight; ++y) {
             for (int x = iterx; x < iterWidth; ++x) {
-                int x1 = x;  // Use x directly
-                int y1 = y;  // Use y directly
+                int x1 = x - iterx;
+                int y1 = y - itery;
                 signed short ctData = pCTData[(dicom.height - 1 - y) * locationx + locationy + x];
                 int16_t pixelValue;
                 if (isUsingHURange)
@@ -819,8 +851,8 @@ void GlWdgImpl::sampleCTData() {
         //#pragma omp parallel for collapse(2)
         for (int y = itery; y < iterHeight; ++y) {
             for (int x = iterx; x < iterWidth; ++x) {
-                int x1 = x;  // Use x directly
-                int y1 = y;  // Use y directly
+                int x1 = x - iterx;
+                int y1 = y - itery;
                 signed short ctData = pCTData[locationx * (dicom.height - y - 1) + m_curIndex + dicom.total * x];
                 int16_t pixelValue;
                 if (isUsingHURange)
@@ -866,94 +898,13 @@ void GlWdgImpl::sampleCTData() {
     {
         return;
     }
-    
-    // Mark that sampling is complete
-    m_needResample = false;
-}
+    // ƽ��
+    //paint.translate(m_translate.x(), m_translate.y());
 
-void GlWdgImpl::paintEvent(QPaintEvent* event) {
-    QPainter paint(this);
-    paint.setRenderHint(QPainter::Antialiasing);
-    paint.setRenderHint(QPainter::SmoothPixmapTransform);
-
-    if (!ImgVmFactory::stGetInstance()->getCtInfo() || !ImgVmFactory::stGetInstance()->getCtInfo()->pCtInfo)
-        return;
-    
-    // Only resample when needed
-    if (m_needResample) {
-        sampleCTData();
-    }
-    
-    // Get dicom info for drawing
-    auto dicom = ImgVmFactory::stGetInstance()->getCtInfo()->pCtInfo->dicoms[m_type];
-    
-    // Calculate m_glRect (display area)
-    int glRectWidth = this->width() - 144, glRectHeight = this->height() - 67;
-    if (m_glRect.width() != 0 && m_glRect.width() < glRectWidth)
-    {
-        full_ratio = (glRectWidth * 1.0) / m_glRect.width();
-    }
-    else if (m_glRect.width() > glRectWidth)
-    {
-        full_ratio = 1.0;
-    }
-    m_glRect = QRect(90, 30, glRectWidth, glRectHeight);
-    m_imgRct = QRect(m_glRect.x(), m_glRect.y(), m_glRect.width(), m_glRect.height());
-    
-    // Calculate unit view for coordinate conversion
-    float ct_width, ct_height;
-    switch (m_type) {
-    case AimLibDefine::ViewNameEnum::E_AXIAL: {
-        ct_width = (dicom.width - 1) * dicom.xSpacing;
-        ct_height = (dicom.height - 1) * dicom.ySpacing;
-    } break;
-    case AimLibDefine::ViewNameEnum::E_CORONAL:
-        ct_width = (dicom.width - 1) * dicom.xSpacing;
-        ct_height = (dicom.height - 1) * dicom.zSpacing;
-        break;
-    case AimLibDefine::ViewNameEnum::E_SAGITTAL:
-        ct_width = (dicom.width - 1) * dicom.ySpacing;
-        ct_height = (dicom.height - 1) * dicom.zSpacing;
-        break;
-    default:
-        break;
-    }
-    
-    if (ct_width > ct_height) {
-        m_unitView = ct_height / m_scale / m_glRect.height();
-    } else {
-        m_unitView = ct_width / m_scale / m_glRect.width();
-    }
-    
-    // Use QPainter transform for scaling and translation
-    paint.save();
-    
-    // Set clipping to ensure image doesn't draw outside m_glRect
-    paint.setClipRect(m_glRect);
-    
-    // Calculate center point for scaling (view center)
-    QPointF center = m_glRect.center();
-    
-    // Translate to center point
-    paint.translate(center);
-    
-    // Apply scaling
-    paint.scale(m_scale, m_scale);
-    
-    // Apply user translation
-    paint.translate(m_translate.x(), m_translate.y());
-    
-    // Translate back considering image dimensions
-    // This ensures the image is centered when scale = 1.0
-    QRectF scaledRect(-dicom.width / 2.0, -dicom.height / 2.0, dicom.width, dicom.height);
-    
+    // ����
+    //paint.scale(m_scale, m_scale);
     paint.setOpacity(1.0);
-    
-    // Draw the complete CT image
-    // Due to transforms, image will automatically scale and translate
-    paint.drawImage(scaledRect, m_curQImg);
-    
-    paint.restore();
+    paint.drawImage(m_imgRct, m_curQImg);
 
     // ���ɸ�������
     /*if (drawHighLightRegion())
@@ -1055,7 +1006,6 @@ void GlWdgImpl::timerEvent(QTimerEvent* event) {
         curcenter = needcenter;
         m_curMaxHU = m_needMaxHU;
         m_curMinHU = m_needMinHU;
-        m_needResample = true;  // Need to resample when these values change
         update();
     }
 }

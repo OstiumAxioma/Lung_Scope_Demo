@@ -77,3 +77,55 @@ QRect calculateViewRect();      // 计算viewRect
 ## 预期效果
 
 解决原有的"缩放向左上角偏移"问题，实现类似VTK相机系统的真正中心缩放效果。
+
+## 问题修复记录
+
+### 修复1：缩小时向左上角偏移
+**问题**：放大正常，但缩小时仍向左上角偏移
+**原因**：边界检查逻辑不当，缩小时限制了可视范围
+**解决方案**：
+```cpp
+// 区分放大和缩小的边界检查
+if (m_zoomFactor > 1.0) {
+    // 放大时限制范围
+    maxViewX = static_cast<int>(dicom.width - centerOffsetX * 2);
+    maxViewY = static_cast<int>(dicom.height - centerOffsetY * 2);
+} else {
+    // 缩小时允许更大范围
+    maxViewX = dicom.width - 1;
+    maxViewY = dicom.height - 1;
+}
+```
+
+### 修复2：平移上下方向反了
+**问题**：鼠标向上拖拽时图像向下移动，方向相反
+**原因**：Qt坐标系Y轴向下，但用户期望Y轴向上
+**解决方案**：
+```cpp
+// 在calculateViewRect中对Y方向取反
+int viewY = static_cast<int>(m_viewCenter.y() - centerOffsetY - m_panOffset.y());
+```
+
+### 修复3：混合缩放算法实现
+**问题**：需要结合两种方案的优势，确保放大和缩小都能正确中心缩放
+**解决方案**：
+- 采用增量偏移算法（来自GlWdgImpl_zoomout.cpp）作为核心算法
+- 保留边界检查和安全性改进
+- 使用公式：`offsetX = (1.0 - 1.0/scaleFactor) * m_glRect.width() / 2`
+- 直接操作viewRect，避免与transform matrix计算冲突
+
+```cpp
+// 混合方案：结合增量偏移算法和变换矩阵方案
+double scaleFactor = v / oldScale;
+int offsetX = (int)((1.0 - 1.0/scaleFactor) * m_glRect.width() / 2);
+int offsetY = (int)((1.0 - 1.0/scaleFactor) * m_glRect.height() / 2);
+int newX = viewRect.x() + offsetX;
+int newY = viewRect.y() + offsetY;
+```
+
+### 当前状态
+- ✅ 放大时中心缩放正常
+- ✅ 缩小时中心缩放正常（使用增量偏移算法修复）
+- ✅ 平移方向正确（上下左右都正常）
+- ✅ 边界检查合理
+- ✅ 混合算法实现完成

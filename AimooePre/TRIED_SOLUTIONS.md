@@ -77,7 +77,37 @@ int y1 = y - viewRect.y() - offsetY;
 
 ## ✅ 当前正在尝试的方案
 
-### QImage 中心填充方案
+### 6. 中间层方案
+**尝试内容**：
+```cpp
+QImage GlWdgImpl::applyCenterCorrection(const QImage& original) {
+    if (m_scale >= 1.0) {
+        return original;  // 放大时不处理
+    }
+    
+    // 缩小时创建居中版本
+    QImage centered(m_imgRct.width(), m_imgRct.height(), QImage::Format_RGB32);
+    centered.fill(qRgb(0, 0, 0));
+    
+    int offsetX = (centered.width() - original.width()) / 2;
+    int offsetY = (centered.height() - original.height()) / 2;
+    
+    QPainter painter(&centered);
+    painter.drawImage(offsetX, offsetY, original);
+    return centered;
+}
+
+// 在paintEvent中应用
+QImage centeredImg = applyCenterCorrection(m_curQImg);
+paint.drawImage(m_imgRct, centeredImg);
+```
+
+**方案特点**：
+- 最小侵入性：只修改绘制阶段，不影响采样逻辑
+- 分离关注点：缩放逻辑和显示逻辑分离
+- 向后兼容：放大时直接返回原图，保持现有行为
+
+### QImage 中心填充方案（已废弃）
 **思路**：
 - 保持 QImage 大小不变（img_width × img_height）
 - 当缩小时，QImage 比实际数据大

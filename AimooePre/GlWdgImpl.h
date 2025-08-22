@@ -200,12 +200,7 @@ public:
     virtual bool getInteractiveMode();
 
     virtual bool updateEllipseCenter(QVector3D center);
-    
 private:
-    // 新增：变换矩阵相关辅助函数
-    void updateViewTransform();
-    void initializeViewCenter();
-    QRect calculateViewRect();
     void paintEvent(QPaintEvent* event) override;
     void resizeEvent(QResizeEvent* event) override;
     void closeEvent(QCloseEvent* event) override;
@@ -229,6 +224,9 @@ private:
 
     QPoint fromSpacegetAimgl(QVector3D p);
     QVector3D fromAimglgetSpace(QPoint p);
+    
+    // Private method to sample CT data into QImage
+    void sampleCTData();
 
 private slots:
     void handleLicense(RegisterTimer::ErrCode err);
@@ -244,6 +242,7 @@ private:
     QImage m_curQImg;
     QImage m_curFusionImg;
     QImage m_curMask;
+    bool m_needResample = true;  // Flag to indicate if resampling is needed
     int16* m_pImgBuf = nullptr;
     int16* m_pLabelImgBuf = nullptr;
     int16* m_pFusionImgBuf = nullptr;
@@ -275,11 +274,6 @@ private:
     double m_scale = 1.0;
     QPoint m_translate = QPoint(0, 0);
     float full_ratio = 1.0;
-    
-    // 新增：模拟相机的变换参数
-    QPointF m_viewCenter = QPointF(0, 0);    // 视图中心（图像像素坐标）
-    double m_zoomFactor = 1.0;               // 缩放因子
-    QPointF m_panOffset = QPointF(0, 0);     // 平移偏移
 
     //ͼ����ߵ�λ����
     float m_unitView = 0.0;
