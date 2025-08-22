@@ -1094,6 +1094,114 @@ void GlWdgImpl::paintEvent(QPaintEvent* event) {
     }
     
     paint.restore();
+    
+    // Draw edge indicators (lines that stay at window edges)
+    // These lines follow the crosshair but stay at the edges
+    // Need to get dicom info again after restore
+    auto dicom2 = ImgVmFactory::stGetInstance()->getCtInfo()->pCtInfo->dicoms[m_type];
+    QPointF center2 = m_glRect.center();
+    
+    std::for_each(m_drawInfos.begin(), m_drawInfos.end(), [&](DrawInfo* info) {
+        switch (info->type) {
+        case DrawType::DT_Line: {
+            // Get the line endpoints
+            QVector3D p1 = info->info->line.p1;
+            QVector3D p2 = info->info->line.p2;
+            std::vector<double> imgPos = ImgVmFactory::stGetInstance()->getCtInfo()->pCtInfo->pSliceInfo->imgPosition;
+            
+            // Convert space coordinates to pixel coordinates for the crosshair position
+            float crosshairPixelX = 0, crosshairPixelY = 0;
+            QVector3D crosshairPos = curcenter;  // Use the current crosshair position
+            
+            switch (m_type) {
+            case AimLibDefine::E_AXIAL:
+                crosshairPixelX = (crosshairPos.x() - imgPos[0]) / dicom2.xSpacing;
+                crosshairPixelY = (crosshairPos.y() - imgPos[1]) / dicom2.ySpacing;
+                break;
+            case AimLibDefine::E_CORONAL:
+                crosshairPixelX = (crosshairPos.x() - imgPos[0]) / dicom2.xSpacing;
+                crosshairPixelY = dicom2.height - 1 - (crosshairPos.z() - imgPos[2]) / dicom2.zSpacing;
+                break;
+            case AimLibDefine::E_SAGITTAL:
+                crosshairPixelX = (crosshairPos.y() - imgPos[1]) / dicom2.ySpacing;
+                crosshairPixelY = dicom2.height - 1 - (crosshairPos.z() - imgPos[2]) / dicom2.zSpacing;
+                break;
+            }
+            
+            // Convert to physical coordinates
+            float physicalWidth2, physicalHeight2;
+            switch (m_type) {
+            case AimLibDefine::ViewNameEnum::E_AXIAL:
+                physicalWidth2 = dicom2.width * dicom2.xSpacing;
+                physicalHeight2 = dicom2.height * dicom2.ySpacing;
+                break;
+            case AimLibDefine::ViewNameEnum::E_CORONAL:
+                physicalWidth2 = dicom2.width * dicom2.xSpacing;
+                physicalHeight2 = dicom2.height * dicom2.zSpacing;
+                break;
+            case AimLibDefine::ViewNameEnum::E_SAGITTAL:
+                physicalWidth2 = dicom2.width * dicom2.ySpacing;
+                physicalHeight2 = dicom2.height * dicom2.zSpacing;
+                break;
+            default:
+                physicalWidth2 = dicom2.width;
+                physicalHeight2 = dicom2.height;
+                break;
+            }
+            
+            float physX = crosshairPixelX * (m_type == AimLibDefine::E_SAGITTAL ? dicom2.ySpacing : dicom2.xSpacing);
+            float physY = crosshairPixelY * (m_type == AimLibDefine::E_AXIAL ? dicom2.ySpacing : dicom2.zSpacing);
+            physX -= physicalWidth2 / 2.0;
+            physY -= physicalHeight2 / 2.0;
+            
+            // Apply transform to get screen position
+            QPointF screenPos;
+            screenPos.setX(center2.x() + (physX + m_translate.x()) * m_scale);
+            screenPos.setY(center2.y() + (physY + m_translate.y()) * m_scale);
+            
+            // Determine if this is a vertical or horizontal line
+            bool isVertical = (abs(p1.x() - p2.x()) < 0.001 && abs(p1.y() - p2.y()) > 0.001) ||
+                            (abs(p1.x() - p2.x()) < 0.001 && abs(p1.z() - p2.z()) > 0.001) ||
+                            (abs(p1.y() - p2.y()) < 0.001 && abs(p1.z() - p2.z()) > 0.001);
+            
+            QPen pen(info->info->line.clr, info->info->line.width);
+            if (info->info->line.bDash) {
+                QVector<qreal>dashes;
+                qreal space = 4;
+                dashes << 3 << space;
+                pen.setDashPattern(dashes);
+            }
+            paint.setPen(pen);
+            
+            if (isVertical) {
+                // Vertical line (purple) - stays at left/right edges, follows Y
+                paint.drawLine(QPointF(m_glRect.left(), screenPos.y()), 
+                             QPointF(m_glRect.left() + 10, screenPos.y()));  // Left edge
+                paint.drawLine(QPointF(m_glRect.right() - 10, screenPos.y()), 
+                             QPointF(m_glRect.right(), screenPos.y()));  // Right edge
+            } else {
+                // Horizontal line (green) - stays at top/bottom edges, follows X
+                paint.drawLine(QPointF(screenPos.x(), m_glRect.top()), 
+                             QPointF(screenPos.x(), m_glRect.top() + 10));  // Top edge
+                paint.drawLine(QPointF(screenPos.x(), m_glRect.bottom() - 10), 
+                             QPointF(screenPos.x(), m_glRect.bottom()));  // Bottom edge
+            }
+        }
+        break;
+        case DrawType::DT_Point:
+            // Draw points normally (outside transform)
+            drawPoint(&paint, info->info->point);
+            break;
+        case DrawType::DT_Polygon:
+            // Draw polygons normally (outside transform)
+            drawPolygon(&paint, info->info->polygon);
+            break;
+        case DrawType::DT_Curve:
+            // Draw curves normally (outside transform)
+            drawCurve(&paint, info->info->curveInfo);
+            break;
+        }
+    });
 
     // ���ɸ�������
     /*if (drawHighLightRegion())
@@ -1102,23 +1210,7 @@ void GlWdgImpl::paintEvent(QPaintEvent* event) {
         paint.drawImage(m_imgRct, m_curMask);
     }*/
 
-    std::for_each(m_drawInfos.begin(), m_drawInfos.end(), [&](DrawInfo* info) {
-        switch (info->type) {
-        case DrawType::DT_Line:
-            drawLine(&paint, info->info->line);
-            break;
-        case DrawType::DT_Point:
-            drawPoint(&paint, info->info->point);
-            break;
-        case DrawType::DT_Polygon:
-            drawPolygon(&paint, info->info->polygon);
-            break;
-        case DrawType::DT_Curve:
-            drawCurve(&paint, info->info->curveInfo);
-            break;
-
-        }
-        });
+    // Drawing of lines, points, polygons, curves has been moved inside transform above
     //��������
     for (auto item : m_drawText)
     {
