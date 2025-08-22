@@ -250,72 +250,89 @@ QVector3D GlWdgImpl::pointFromGlToSpace(QPoint p) {
     auto pCtInfo = ImgVmFactory::stGetInstance()->getCtInfo();
     if (!pCtInfo || !pCtInfo->pCtInfo)
         return ret;
-    QPoint realpoint = QPoint(p.x() - m_glRect.x(), p.y() - m_glRect.y());
-    QRect viewRect = ImgVmFactory::stGetInstance()->getViewRect(m_type);
+        
     auto dicom = ImgVmFactory::stGetInstance()->getCtInfo()->pCtInfo->dicoms[getGlWidgetType()];
     auto xspace = dicom.xSpacing;
     auto yspace = dicom.ySpacing;
     auto zspace = dicom.zSpacing;
-    //������ͼ����
-    std::vector<double> imgPos = pCtInfo->pCtInfo->pSliceInfo->imgPosition;//ԭ�����˱䶯
-    float ct_width, ct_height, ctWidthSpacing, ctHeightSpacing;
+    std::vector<double> imgPos = pCtInfo->pCtInfo->pSliceInfo->imgPosition;
+    
+    // Step 1: Convert screen point to GL widget coordinates
+    QPointF screenPoint(p.x() - m_glRect.x(), p.y() - m_glRect.y());
+    
+    // Step 2: Get center of the view
+    QPointF center = m_glRect.center() - QPointF(m_glRect.x(), m_glRect.y());
+    
+    // Step 3: Apply inverse transform (reverse of paintEvent transform)
+    // First subtract center
+    screenPoint -= center;
+    // Then apply inverse translation
+    screenPoint -= QPointF(m_translate.x(), m_translate.y());
+    // Then apply inverse scale
+    screenPoint /= m_scale;
+    
+    // Step 4: Convert to physical coordinates
+    float physicalWidth, physicalHeight;
     switch (m_type) {
-    case AimLibDefine::ViewNameEnum::E_AXIAL: {
-        ct_width = (dicom.width - 1) * dicom.xSpacing;
-        ct_height = (dicom.height - 1) * dicom.ySpacing;
-        ctWidthSpacing = dicom.xSpacing;
-        ctHeightSpacing = dicom.ySpacing;
-        imgPos[0] = imgPos[0] + viewRect.x() * ctWidthSpacing;
-        imgPos[1] = imgPos[1] + viewRect.y() * ctHeightSpacing;
-    } break;
+    case AimLibDefine::ViewNameEnum::E_AXIAL:
+        physicalWidth = dicom.width * dicom.xSpacing;
+        physicalHeight = dicom.height * dicom.ySpacing;
+        break;
     case AimLibDefine::ViewNameEnum::E_CORONAL:
-        ct_width = (dicom.width - 1) * dicom.xSpacing;
-        ct_height = (dicom.height - 1) * dicom.zSpacing;
-        ctWidthSpacing = dicom.xSpacing;
-        ctHeightSpacing = dicom.zSpacing;
-        imgPos[0] = imgPos[0] + viewRect.x() * ctWidthSpacing;
-        imgPos[2] = imgPos[2] - viewRect.y() * ctHeightSpacing;
+        physicalWidth = dicom.width * dicom.xSpacing;
+        physicalHeight = dicom.height * dicom.zSpacing;
         break;
     case AimLibDefine::ViewNameEnum::E_SAGITTAL:
-        ct_width = (dicom.width - 1) * dicom.ySpacing;
-        ct_height = (dicom.height - 1) * dicom.zSpacing;
-        ctWidthSpacing = dicom.ySpacing;
-        ctHeightSpacing = dicom.zSpacing;
-        imgPos[1] = imgPos[1] + viewRect.x() * ctWidthSpacing;
-        imgPos[2] = imgPos[2] - viewRect.y() * ctHeightSpacing;
+        physicalWidth = dicom.width * dicom.ySpacing;
+        physicalHeight = dicom.height * dicom.zSpacing;
         break;
     default:
+        physicalWidth = dicom.width;
+        physicalHeight = dicom.height;
         break;
     }
-    float unitView;// , unitHeightView;
-    if (ct_width > ct_height)//������Ϊ��
-    {
-        unitView = ct_height / m_scale / m_glRect.height();//��λ��ͼ��������
-        //unitWidthView = m_glRect.width() * unitHeightView/;
+    
+    // Add back the offset to get physical position
+    float physX = screenPoint.x() + physicalWidth / 2.0;
+    float physY = screenPoint.y() + physicalHeight / 2.0;
+    
+    // Step 5: Convert physical coordinates to pixel coordinates
+    float pixelX, pixelY;
+    switch (m_type) {
+    case AimLibDefine::ViewNameEnum::E_AXIAL:
+        pixelX = physX / dicom.xSpacing;
+        pixelY = physY / dicom.ySpacing;
+        break;
+    case AimLibDefine::ViewNameEnum::E_CORONAL:
+        pixelX = physX / dicom.xSpacing;
+        pixelY = physY / dicom.zSpacing;
+        break;
+    case AimLibDefine::ViewNameEnum::E_SAGITTAL:
+        pixelX = physX / dicom.ySpacing;
+        pixelY = physY / dicom.zSpacing;
+        break;
+    default:
+        pixelX = physX;
+        pixelY = physY;
+        break;
     }
-    else
-    {
-        unitView = ct_width / m_scale / m_glRect.width();//��λ��ͼ��������
-        //unitHeightView = unitWidthView / ctWidthSpacing * ctHeightSpacing;
-    }
-    float x = realpoint.x() * unitView;
-    float y = realpoint.y() * unitView;
-
+    
+    // Step 6: Convert to 3D space coordinates
     switch (m_type) {
     case AimLibDefine::E_AXIAL: {
+        ret.setX(imgPos[0] + pixelX * xspace);
+        ret.setY(imgPos[1] + pixelY * yspace);
         ret.setZ(imgPos[2] + m_curIndex * zspace);
-        ret.setY(imgPos[1] + y);
-        ret.setX(imgPos[0] + x);
     }break;
     case AimLibDefine::E_CORONAL: {
-        ret.setZ(imgPos[2] + ct_height - y);
+        ret.setX(imgPos[0] + pixelX * xspace);
         ret.setY(imgPos[1] + m_curIndex * yspace);
-        ret.setX(imgPos[0] + x);
+        ret.setZ(imgPos[2] + (dicom.height - 1 - pixelY) * zspace);
     }break;
     case AimLibDefine::E_SAGITTAL: {
-        ret.setZ(imgPos[2] + ct_height - y);
-        ret.setY(imgPos[1] + x);
         ret.setX(imgPos[0] + m_curIndex * xspace);
+        ret.setY(imgPos[1] + pixelX * yspace);
+        ret.setZ(imgPos[2] + (dicom.height - 1 - pixelY) * zspace);
     }break;
     case AimLibDefine::E_SHOW3D:
         break;
@@ -973,6 +990,100 @@ void GlWdgImpl::paintEvent(QPaintEvent* event) {
     // Due to transforms, image will automatically scale and translate
     paint.drawImage(scaledRect, m_curQImg);
     
+    // Draw crosshair while transform is still active
+    // This makes the crosshair follow the image
+    if (InteractiveMode)
+    {
+        // Convert from space to image pixel coordinates
+        QVector3D spacePos = curcenter;
+        std::vector<double> imgPos = ImgVmFactory::stGetInstance()->getCtInfo()->pCtInfo->pSliceInfo->imgPosition;
+        
+        float pixelX = 0, pixelY = 0;
+        switch (m_type) {
+        case AimLibDefine::E_AXIAL: {
+            pixelX = (spacePos.x() - imgPos[0]) / dicom.xSpacing;
+            pixelY = (spacePos.y() - imgPos[1]) / dicom.ySpacing;
+        }break;
+        case AimLibDefine::E_CORONAL: {
+            pixelX = (spacePos.x() - imgPos[0]) / dicom.xSpacing;
+            pixelY = dicom.height - 1 - (spacePos.z() - imgPos[2]) / dicom.zSpacing;
+        }break;
+        case AimLibDefine::E_SAGITTAL: {
+            pixelX = (spacePos.y() - imgPos[1]) / dicom.ySpacing;
+            pixelY = dicom.height - 1 - (spacePos.z() - imgPos[2]) / dicom.zSpacing;
+        }break;
+        default:
+            break;
+        }
+        
+        // Map to physical coordinates (considering spacing)
+        float physX = pixelX * (m_type == AimLibDefine::E_SAGITTAL ? dicom.ySpacing : dicom.xSpacing);
+        float physY = pixelY * (m_type == AimLibDefine::E_AXIAL ? dicom.ySpacing : dicom.zSpacing);
+        
+        // Offset to match the image rect
+        physX -= physicalWidth / 2.0;
+        physY -= physicalHeight / 2.0;
+        
+        // Draw ellipse
+        float radius = curradius * full_ratio / m_scale;
+        QPainterPath path;
+        path.addEllipse(QPointF(physX, physY), radius, radius);
+        paint.setPen(QPen(QColor("#91A2AE"), 2));
+        paint.drawPath(path);
+        
+        // Draw center point
+        QPen pen(Qt::red);
+        pen.setWidth(5 / m_scale);  // Adjust pen width for scale
+        paint.setPen(pen);
+        paint.drawPoint(QPointF(physX, physY));
+    }
+    else // Crosshair mode
+    {
+        // Convert from space to image pixel coordinates
+        QVector3D spacePos = curcenter;
+        std::vector<double> imgPos = ImgVmFactory::stGetInstance()->getCtInfo()->pCtInfo->pSliceInfo->imgPosition;
+        
+        float pixelX = 0, pixelY = 0;
+        switch (m_type) {
+        case AimLibDefine::E_AXIAL: {
+            pixelX = (spacePos.x() - imgPos[0]) / dicom.xSpacing;
+            pixelY = (spacePos.y() - imgPos[1]) / dicom.ySpacing;
+        }break;
+        case AimLibDefine::E_CORONAL: {
+            pixelX = (spacePos.x() - imgPos[0]) / dicom.xSpacing;
+            pixelY = dicom.height - 1 - (spacePos.z() - imgPos[2]) / dicom.zSpacing;
+        }break;
+        case AimLibDefine::E_SAGITTAL: {
+            pixelX = (spacePos.y() - imgPos[1]) / dicom.ySpacing;
+            pixelY = dicom.height - 1 - (spacePos.z() - imgPos[2]) / dicom.zSpacing;
+        }break;
+        default:
+            break;
+        }
+        
+        // Map to physical coordinates (considering spacing)
+        float physX = pixelX * (m_type == AimLibDefine::E_SAGITTAL ? dicom.ySpacing : dicom.xSpacing);
+        float physY = pixelY * (m_type == AimLibDefine::E_AXIAL ? dicom.ySpacing : dicom.zSpacing);
+        
+        // Offset to match the image rect
+        physX -= physicalWidth / 2.0;
+        physY -= physicalHeight / 2.0;
+        
+        // Draw crosshair lines
+        int linelength = 15 / m_scale;  // Adjust line length for scale
+        QPen pen2(QColor("#FFFFFF"));
+        pen2.setWidth(1.0 / m_scale);
+        paint.setPen(pen2);
+        paint.drawLine(QPointF(physX - linelength, physY), QPointF(physX + linelength, physY));
+        paint.drawLine(QPointF(physX, physY - linelength), QPointF(physX, physY + linelength));
+        
+        // Draw center point
+        QPen pen(Qt::red);
+        pen.setWidth(5 / m_scale);  // Adjust pen width for scale
+        paint.setPen(pen);
+        paint.drawPoint(QPointF(physX, physY));
+    }
+    
     paint.restore();
 
     // ���ɸ�������
@@ -1003,45 +1114,6 @@ void GlWdgImpl::paintEvent(QPaintEvent* event) {
     for (auto item : m_drawText)
     {
         drawText(&paint, item);
-    }
-
-    if (InteractiveMode)
-    {
-        //ʵ�ʳ�����Ҫת�ɶ�ά���곤��
-        float centerradiuradio = curradius * full_ratio;
-        QVector3D leftCenterPoint = QVector3D(curcenter.x() + centerradiuradio, curcenter.y(), curcenter.z());
-        QVector3D rightCenterPoint = QVector3D(curcenter.x() - centerradiuradio, curcenter.y(), curcenter.z());
-        if (m_type == AimLibDefine::ViewNameEnum::E_SAGITTAL)
-        {
-            leftCenterPoint = QVector3D(curcenter.x(), curcenter.y(), curcenter.z() + centerradiuradio);
-            rightCenterPoint = QVector3D(curcenter.x(), curcenter.y(), curcenter.z() - centerradiuradio);
-        }
-        centerradiuradio = QVector2D(pointFromSpaceToGl(rightCenterPoint) - pointFromSpaceToGl(leftCenterPoint)).length();
-
-        QPainterPath path;
-        QPoint centerPoint = pointFromSpaceToGl(curcenter);
-        path.addEllipse(centerPoint.x() - centerradiuradio / 2, centerPoint.y() - centerradiuradio / 2, centerradiuradio, centerradiuradio);
-        paint.setPen(QPen(QColor("#91A2AE"), 2));
-        paint.drawPath(path);
-
-        QPen pen(Qt::red);
-        pen.setWidth(5);
-        paint.setPen(pen);
-        paint.drawPoint(centerPoint);
-    }
-    else//ʮ�ֲ�
-    {
-        QPoint centerPoint = pointFromSpaceToGl(curcenter);
-        int linelength = 15;
-        QPen pen2(QColor("#FFFFFF"));
-        paint.setPen(pen2);
-        paint.drawLine(centerPoint.x() - linelength, centerPoint.y(), centerPoint.x() + linelength, centerPoint.y());
-        paint.drawLine(centerPoint.x(), centerPoint.y() - linelength, centerPoint.x(), centerPoint.y() + linelength);
-
-        QPen pen(Qt::red);
-        pen.setWidth(5);
-        paint.setPen(pen);
-        paint.drawPoint(centerPoint);
     }
 
 }
@@ -1081,10 +1153,8 @@ void GlWdgImpl::timerEvent(QTimerEvent* event) {
 }
 
 void GlWdgImpl::mouseReleaseEvent(QMouseEvent* event) {
-    auto pos = event->pos();
-    pos.setX((pos.x() - m_imgRct.x()) / m_scale);
-    pos.setY((pos.y() - m_imgRct.y()) / m_scale);
-    event->setLocalPos(pos);
+    // No need to transform the position anymore
+    // pointFromGlToSpace will handle all transformations
     QWidget::mouseReleaseEvent(event);
 }
 
