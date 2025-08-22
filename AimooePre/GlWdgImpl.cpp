@@ -264,12 +264,21 @@ QVector3D GlWdgImpl::pointFromGlToSpace(QPoint p) {
     QPointF center = m_glRect.center() - QPointF(m_glRect.x(), m_glRect.y());
     
     // Step 3: Apply inverse transform (reverse of paintEvent transform)
-    // First subtract center
+    // The paintEvent transform order is:
+    // 1. translate(center)
+    // 2. scale(m_scale, m_scale)
+    // 3. translate(m_translate)
+    // So inverse should be:
+    // 1. subtract center
+    // 2. divide by scale  
+    // 3. subtract user translation
+    
+    // First, move origin to center (inverse of translate(center))
     screenPoint -= center;
-    // Then apply inverse translation
-    screenPoint -= QPointF(m_translate.x(), m_translate.y());
     // Then apply inverse scale
     screenPoint /= m_scale;
+    // Then apply inverse user translation
+    screenPoint -= QPointF(m_translate.x(), m_translate.y());
     
     // Step 4: Convert to physical coordinates
     float physicalWidth, physicalHeight;
