@@ -3,6 +3,7 @@
 #include <QGuiApplication>
 #include <QCloseEvent>
 #include <QMouseEvent>
+#include <QWheelEvent>
 #include <QApplication>
 #include <windows.h>
 #include <TlHelp32.h>
@@ -1159,10 +1160,22 @@ void GlWdgImpl::paintEvent(QPaintEvent* event) {
             screenPos.setX(center2.x() + (physX + m_translate.x()) * m_scale);
             screenPos.setY(center2.y() + (physY + m_translate.y()) * m_scale);
             
-            // Determine if this is a vertical or horizontal line
-            bool isVertical = (abs(p1.x() - p2.x()) < 0.001 && abs(p1.y() - p2.y()) > 0.001) ||
-                            (abs(p1.x() - p2.x()) < 0.001 && abs(p1.z() - p2.z()) > 0.001) ||
-                            (abs(p1.y() - p2.y()) < 0.001 && abs(p1.z() - p2.z()) > 0.001);
+            // Determine if this is a vertical or horizontal line based on view type
+            bool isVertical = false;
+            switch (m_type) {
+            case AimLibDefine::E_AXIAL:
+                // In axial view: vertical lines vary in Y, horizontal lines vary in X
+                isVertical = (abs(p1.x() - p2.x()) < 0.001 && abs(p1.y() - p2.y()) > 0.001);
+                break;
+            case AimLibDefine::E_CORONAL:
+                // In coronal view: vertical lines vary in Z, horizontal lines vary in X
+                isVertical = (abs(p1.x() - p2.x()) < 0.001 && abs(p1.z() - p2.z()) > 0.001);
+                break;
+            case AimLibDefine::E_SAGITTAL:
+                // In sagittal view: vertical lines vary in Z, horizontal lines vary in Y
+                isVertical = (abs(p1.y() - p2.y()) < 0.001 && abs(p1.z() - p2.z()) > 0.001);
+                break;
+            }
             
             QPen pen(info->info->line.clr, info->info->line.width);
             if (info->info->line.bDash) {
@@ -1262,6 +1275,39 @@ void GlWdgImpl::mouseReleaseEvent(QMouseEvent* event) {
 void GlWdgImpl::mouseMoveEvent(QMouseEvent* event)
 {
     QWidget::mouseMoveEvent(event);
+}
+
+void GlWdgImpl::wheelEvent(QWheelEvent* event)
+{
+    // Check if Ctrl is pressed
+    if (event->modifiers() & Qt::ControlModifier) {
+        // Ctrl+wheel: Handle zoom
+        // The zoom should be handled here or in parent class
+        // Just pass to parent
+        QWidget::wheelEvent(event);
+    } else {
+        // Direct wheel: Switch slice
+        // Save the current crosshair position in 3D space
+        QVector3D savedCenter = curcenter;
+        
+        // Handle slice switching (this will change m_curIndex/m_needIndex)
+        int delta = event->angleDelta().y();
+        if (delta > 0) {
+            // Scroll up - previous slice
+            loadCtInfo(m_curIndex - 1);
+        } else if (delta < 0) {
+            // Scroll down - next slice
+            loadCtInfo(m_curIndex + 1);
+        }
+        
+        // Important: Keep the crosshair at the same 3D position
+        // Don't let the slice change affect the crosshair position
+        curcenter = savedCenter;
+        needcenter = savedCenter;
+        
+        // Don't pass to parent to avoid double processing
+        event->accept();
+    }
 }
 
 void GlWdgImpl::drawPoint(QPainter* painter, PointInfo& info) {
