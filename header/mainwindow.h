@@ -17,6 +17,7 @@ VTK_MODULE_INIT(vtkRenderingVolumeOpenGL2)
 #include <QPushButton>
 #include <QFileDialog>
 #include <QMessageBox>
+#include <QInputDialog>
 
 // VTK includes for DICOM and imaging
 #include <vtkSmartPointer.h>
@@ -24,7 +25,10 @@ VTK_MODULE_INIT(vtkRenderingVolumeOpenGL2)
 #include <vtkRenderWindow.h>
 #include <vtkRenderWindowInteractor.h>
 #include <vtkDICOMImageReader.h>
+#include <vtkNIFTIImageReader.h>
 #include <vtkImageData.h>
+#include <vtkImageCast.h>
+#include <vtkImageShiftScale.h>
 #include <vtkImageViewer2.h>
 #include <vtkImageReslice.h>
 #include <vtkMatrix4x4.h>
@@ -35,6 +39,10 @@ VTK_MODULE_INIT(vtkRenderingVolumeOpenGL2)
 #include <vtkPolyDataMapper.h>
 #include <vtkActor.h>
 #include <vtkProperty.h>
+#include <vtkSmoothPolyDataFilter.h>
+#include <vtkPolyDataNormals.h>
+#include <vtkDecimatePro.h>
+#include <vtkImageGaussianSmooth.h>
 #include <vtkInteractorStyleImage.h>
 #include <vtkInteractorStyleTrackballCamera.h>
 #include <vtkRenderWindowInteractor.h>
@@ -90,9 +98,11 @@ private slots:
     void createStatusBar();
     void setupUI();
     void loadDICOMFiles();
+    void loadNIFTIFile();
     void onAxialSliderChanged(int value);
     void onCoronalSliderChanged(int value);
     void onSagittalSliderChanged(int value);
+    void onIsoValueSliderChanged(int value);
 
 private:
     void setupFourViews();
@@ -104,6 +114,7 @@ private:
     void setupImageViewer(vtkSmartPointer<vtkImageViewer2> viewer, 
                          QVTKOpenGLWidget* widget, 
                          int orientation);
+    void loadImageData(vtkSmartPointer<vtkImageData> data, const QString& sourceInfo);
     
     // UI组件
     QWidget *centralWidget;
@@ -113,15 +124,19 @@ private:
     QVTKOpenGLWidget *axialWidget;
     QVTKOpenGLWidget *coronalWidget;
     QVTKOpenGLWidget *sagittalWidget;
-    QVTKOpenGLWidget *volumeWidget;
+    QVTKOpenGLWidget *surfaceWidget;
     
     // 滑条和标签
     QSlider *axialSlider;
     QSlider *coronalSlider;
     QSlider *sagittalSlider;
+    QSlider *isoValueSlider;  // 等值面阈值滑条
+    QSlider *smoothnessSlider; // 平滑度滑条
     QLabel *axialLabel;
     QLabel *coronalLabel;
     QLabel *sagittalLabel;
+    QLabel *isoValueLabel;    // 等值面阈值标签
+    QLabel *smoothnessLabel;  // 平滑度标签
     
     // 菜单和动作
     QMenu *fileMenu;
@@ -130,10 +145,13 @@ private:
     QAction *exitAct;
     QAction *aboutAct;
     QAction *loadDICOMAct;
+    QAction *loadNIFTIAct;
     QPushButton *loadButton;
+    QPushButton *loadNiftiButton;
 
     // VTK DICOM相关组件
     vtkSmartPointer<vtkDICOMImageReader> dicomReader;
+    vtkSmartPointer<vtkNIFTIImageReader> niftiReader;
     vtkSmartPointer<vtkImageData> imageData;
     
     // 三个方向的图像查看器
@@ -142,7 +160,7 @@ private:
     vtkSmartPointer<vtkImageViewer2> sagittalViewer;
     
     // 3D表面渲染组件
-    vtkSmartPointer<vtkRenderer> volumeRenderer;
+    vtkSmartPointer<vtkRenderer> surfaceRenderer;
     vtkSmartPointer<vtkMarchingCubes> marchingCubes;
     vtkSmartPointer<vtkPolyDataMapper> surfaceMapper;
     vtkSmartPointer<vtkActor> surfaceActor;
@@ -156,6 +174,7 @@ private:
     int dimensions[3];
     double spacing[3];
     double origin[3];
+    double imageRange[2];  // 图像标量值范围
 };
 
 #endif // MAINWINDOW_H 

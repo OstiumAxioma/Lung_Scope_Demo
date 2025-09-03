@@ -16,14 +16,28 @@
   <widget class="QWidget" name="centralwidget">
    <layout class="QVBoxLayout" name="mainVerticalLayout">
     <item>
-     <widget class="QPushButton" name="loadButton">
-      <property name="text">
-       <string>选择DICOM文件夹</string>
-      </property>
-      <property name="maximumHeight">
-       <number>40</number>
-      </property>
-     </widget>
+     <layout class="QHBoxLayout" name="buttonLayout">
+      <item>
+       <widget class="QPushButton" name="loadButton">
+        <property name="text">
+         <string>选择DICOM文件夹</string>
+        </property>
+        <property name="maximumHeight">
+         <number>40</number>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="loadNiftiButton">
+        <property name="text">
+         <string>选择NIFTI文件</string>
+        </property>
+        <property name="maximumHeight">
+         <number>40</number>
+        </property>
+       </widget>
+      </item>
+     </layout>
     </item>
     <item>
      <widget class="QWidget" name="viewsWidget" native="true">
@@ -248,6 +262,7 @@
      <string>文件(&amp;F)</string>
     </property>
     <addaction name="action_Open"/>
+    <addaction name="action_OpenNifti"/>
     <addaction name="separator"/>
     <addaction name="action_Q"/>
    </widget>
@@ -290,6 +305,14 @@
    </property>
    <property name="shortcut">
     <string>Ctrl+O</string>
+   </property>
+  </action>
+  <action name="action_OpenNifti">
+   <property name="text">
+    <string>打开NIFTI文件(&amp;N)</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+N</string>
    </property>
   </action>
  </widget>
