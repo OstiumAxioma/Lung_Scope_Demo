@@ -10,14 +10,14 @@ int main(int argc, char *argv[])
         QApplication app(argc, argv);
         
         // 设置应用程序信息
-        app.setApplicationName("DICOM Reader");
+        app.setApplicationName("VTK Qt 项目");
         app.setApplicationVersion("1.0");
-        app.setOrganizationName("DICOM Reader 开发组");
+        app.setOrganizationName("VTK Qt 项目组");
         
         // 设置应用程序样式
         app.setStyle(QStyleFactory::create("Fusion"));
         
-        qDebug() << "DICOM Reader应用程序初始化成功";
+        qDebug() << "Qt应用程序初始化成功";
         
         // 创建并显示主窗口
         MainWindow window;

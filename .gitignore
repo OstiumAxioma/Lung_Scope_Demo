@@ -6,15 +6,19 @@ Debug/
 Release/
 x64/
 x86/
+static/build/
 
 # IDE and editor files
-.vscode/
-.vs/
 *.swp
 *.swo
 *~
 .DS_Store
 Thumbs.db
+# 忽略整个.vscode文件夹
+.vscode/
+
+# 但不忽略c_cpp_properties.json文件
+!.vscode/c_cpp_properties.json
 
 # CMake generated files
 CMakeCache.txt
@@ -23,6 +27,8 @@ cmake_install.cmake
 Makefile
 *.cmake
 !CMakeLists.txt
+!config.cmake
+config.local.cmake
 
 # Compiled Object files
 *.slo
