@@ -157,6 +157,14 @@ namespace BronchoscopyLib {
             
             // 通过设置actor的位置而不是修改数据源
             markerActor->SetPosition(current->position);
+            
+            // 标记渲染器需要更新（Modified会标记渲染器为dirty）
+            overviewRenderer->Modified();
+            
+            // 如果窗口存在，立即渲染
+            if (overviewWindow) {
+                overviewWindow->Render();
+            }
         }
     };
 
