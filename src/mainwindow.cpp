@@ -262,9 +262,6 @@ void MainWindow::loadAirwayModel()
     
     // 传递数据给静态库
     if (polyData && bronchoscopyViewer->LoadAirwayModel(polyData)) {
-        // 触发Qt的重绘事件，而不是直接调用VTK的Render
-        overviewWidget->update();
-        endoscopeWidget->update();
         statusBar()->showMessage(QString("成功加载模型: %1").arg(fileName), 3000);
         statusLabel->setText("模型已加载");
     } else {
@@ -322,9 +319,6 @@ void MainWindow::loadCameraPath()
     
     // 传递数据给静态库（只传递位置，方向自动计算）
     if (!positions.empty() && bronchoscopyViewer->LoadCameraPath(positions)) {
-        // 触发Qt的重绘事件，而不是直接调用VTK的Render
-        overviewWidget->update();
-        endoscopeWidget->update();
         int total = bronchoscopyViewer->GetTotalPathNodes();
         statusBar()->showMessage(QString("成功加载路径: %1 (%2个节点)").arg(fileName).arg(total), 3000);
         statusLabel->setText(QString("路径: 1/%1").arg(total));
@@ -343,9 +337,6 @@ void MainWindow::loadCameraPath()
 void MainWindow::navigateNext()
 {
     bronchoscopyViewer->MoveToNext();
-    // 触发Qt的重绘事件
-    overviewWidget->update();
-    endoscopeWidget->update();
     int current = bronchoscopyViewer->GetCurrentPathIndex() + 1;
     int total = bronchoscopyViewer->GetTotalPathNodes();
     statusLabel->setText(QString("路径: %1/%2").arg(current).arg(total));
@@ -362,9 +353,6 @@ void MainWindow::navigateNext()
 void MainWindow::navigatePrevious()
 {
     bronchoscopyViewer->MoveToPrevious();
-    // 触发Qt的重绘事件
-    overviewWidget->update();
-    endoscopeWidget->update();
     int current = bronchoscopyViewer->GetCurrentPathIndex() + 1;
     int total = bronchoscopyViewer->GetTotalPathNodes();
     statusLabel->setText(QString("路径: %1/%2").arg(current).arg(total));
@@ -373,9 +361,6 @@ void MainWindow::navigatePrevious()
 void MainWindow::resetNavigation()
 {
     bronchoscopyViewer->ResetToStart();
-    // 触发Qt的重绘事件
-    overviewWidget->update();
-    endoscopeWidget->update();
     int total = bronchoscopyViewer->GetTotalPathNodes();
     statusLabel->setText(QString("路径: 1/%1").arg(total));
     

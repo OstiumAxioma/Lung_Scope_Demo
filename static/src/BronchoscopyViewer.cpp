@@ -111,9 +111,8 @@ namespace BronchoscopyLib {
             
             PathNode* current = cameraPath->GetCurrent();
             
-            // 更新球体位置
-            positionMarker->SetCenter(current->position);
-            positionMarker->Update();
+            // 通过设置actor的位置而不是修改数据源
+            markerActor->SetPosition(current->position);
         }
     };
 
@@ -125,6 +124,7 @@ namespace BronchoscopyLib {
     void BronchoscopyViewer::Initialize() {
         // 初始化位置标记
         pImpl->positionMarker = vtkSmartPointer<vtkSphereSource>::New();
+        pImpl->positionMarker->SetCenter(0, 0, 0);  // 保持在原点
         pImpl->positionMarker->SetRadius(2.0);
         pImpl->positionMarker->SetPhiResolution(20);
         pImpl->positionMarker->SetThetaResolution(20);
@@ -359,6 +359,7 @@ namespace BronchoscopyLib {
     }
 
     void BronchoscopyViewer::Render() {
+        // 直接渲染窗口
         if (pImpl->overviewWindow) {
             pImpl->overviewWindow->Render();
         }
