@@ -109,3 +109,9 @@ markerActor->SetPosition(current->position); // ✅
 1. `cd static && build.bat` (选择3-Both)
 2. `cd .. && build.bat`
 3. 运行: `build/Exe/Release/VTK_Qt_Project.exe`
+
+## 最近更改
+- 2024-xx-xx: 将STL格式支持替换为OBJ格式
+  - 修改文件: `src/mainwindow.cpp`
+  - 包含 `vtkOBJReader.h` 替代 `vtkSTLReader.h`
+  - 更新文件对话框过滤器

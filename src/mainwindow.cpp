@@ -21,7 +21,7 @@
 #include <vtkRenderWindow.h>
 #include <vtkPolyDataReader.h>
 #include <vtkXMLPolyDataReader.h>
-#include <vtkSTLReader.h>
+#include <vtkOBJReader.h>
 #include <vtkSmartPointer.h>
 #include <vtkPolyData.h>
 
@@ -232,7 +232,7 @@ void MainWindow::loadAirwayModel()
     QString fileName = QFileDialog::getOpenFileName(this,
         "选择气管模型文件", 
         "",
-        "3D模型文件 (*.vtk *.vtp *.stl);;VTK文件 (*.vtk);;VTP文件 (*.vtp);;STL文件 (*.stl);;所有文件 (*)");
+        "3D模型文件 (*.vtk *.vtp *.obj);;VTK文件 (*.vtk);;VTP文件 (*.vtp);;OBJ文件 (*.obj);;所有文件 (*)");
     
     if (fileName.isEmpty()) return;
     
@@ -250,8 +250,8 @@ void MainWindow::loadAirwayModel()
         reader->SetFileName(fileStr.c_str());
         reader->Update();
         polyData = reader->GetOutput();
-    } else if (fileName.endsWith(".stl", Qt::CaseInsensitive)) {
-        vtkSmartPointer<vtkSTLReader> reader = vtkSmartPointer<vtkSTLReader>::New();
+    } else if (fileName.endsWith(".obj", Qt::CaseInsensitive)) {
+        vtkSmartPointer<vtkOBJReader> reader = vtkSmartPointer<vtkOBJReader>::New();
         reader->SetFileName(fileStr.c_str());
         reader->Update();
         polyData = reader->GetOutput();
