@@ -140,25 +140,25 @@ if(MSVC)
 endif()
 
 # 查找静态库文件
-find_library(TEMPLATE_LIB_RELEASE 
-    NAMES TemplateLib
+find_library(BRONCHOSCOPY_LIB_RELEASE 
+    NAMES BronchoscopyLib
     PATHS ${CMAKE_CURRENT_SOURCE_DIR}/lib
     NO_DEFAULT_PATH
 )
 
-find_library(TEMPLATE_LIB_DEBUG
-    NAMES TemplateLib_d
+find_library(BRONCHOSCOPY_LIB_DEBUG
+    NAMES BronchoscopyLib_d
     PATHS ${CMAKE_CURRENT_SOURCE_DIR}/lib
     NO_DEFAULT_PATH
 )
 
 # 检查是否找到静态库
-if(NOT TEMPLATE_LIB_RELEASE)
-    message(WARNING "TemplateLib.lib not found in ${CMAKE_CURRENT_SOURCE_DIR}/lib")
+if(NOT BRONCHOSCOPY_LIB_RELEASE)
+    message(WARNING "BronchoscopyLib.lib not found in ${CMAKE_CURRENT_SOURCE_DIR}/lib")
 endif()
 
-if(NOT TEMPLATE_LIB_DEBUG)
-    message(WARNING "TemplateLib_d.lib not found in ${CMAKE_CURRENT_SOURCE_DIR}/lib")
+if(NOT BRONCHOSCOPY_LIB_DEBUG)
+    message(WARNING "BronchoscopyLib_d.lib not found in ${CMAKE_CURRENT_SOURCE_DIR}/lib")
 endif()
 
 # 链接库
@@ -170,13 +170,13 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
 )
 
 # 根据配置链接对应的静态库
-if(TEMPLATE_LIB_RELEASE OR TEMPLATE_LIB_DEBUG)
+if(BRONCHOSCOPY_LIB_RELEASE OR BRONCHOSCOPY_LIB_DEBUG)
     target_link_libraries(${PROJECT_NAME} PRIVATE
-        $<$<CONFIG:Debug>:${TEMPLATE_LIB_DEBUG}>
-        $<$<CONFIG:Release>:${TEMPLATE_LIB_RELEASE}>
+        $<$<CONFIG:Debug>:${BRONCHOSCOPY_LIB_DEBUG}>
+        $<$<CONFIG:Release>:${BRONCHOSCOPY_LIB_RELEASE}>
     )
 else()
-    message(FATAL_ERROR "Static library TemplateLib not found!")
+    message(FATAL_ERROR "Static library BronchoscopyLib not found!")
 endif()
 
 # 部署Qt DLL

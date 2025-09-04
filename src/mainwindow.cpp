@@ -7,34 +7,52 @@
 #include <QFileDialog>
 #include <QVBoxLayout>
 #include <QHBoxLayout>
+#include <QSplitter>
 #include <QTimer>
 #include <QLabel>
 #include <QVTKOpenGLWidget.h>
+#include <QKeyEvent>
+#include <QDebug>
 
 // 包含静态库头文件
-#include "template.h"
+#include "BronchoscopyViewer.h"
 
-// VTK头文件（仅用于获取渲染窗口）
+// VTK头文件
 #include <vtkRenderWindow.h>
+#include <vtkPolyDataReader.h>
+#include <vtkXMLPolyDataReader.h>
+#include <vtkSTLReader.h>
+#include <vtkSmartPointer.h>
+#include <vtkPolyData.h>
+
+#include <fstream>
+#include <sstream>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
-    , vtkWidget(nullptr)
-    , vtkRenderer(std::make_unique<TemplateLib::VTKRenderer>())
+    , overviewWidget(nullptr)
+    , endoscopeWidget(nullptr)
+    , autoPlayTimer(nullptr)
+    , isPlaying(false)
+    , bronchoscopyViewer(std::make_unique<BronchoscopyLib::BronchoscopyViewer>())
 {
-    setWindowTitle("VTK Qt 项目");
-    resize(800, 600);
+    setWindowTitle("支气管腔镜可视化系统");
+    resize(1200, 600);
 
     createActions();
     createMenus();
     createToolBars();
     createStatusBar();
     
-    // 先创建一个简单的界面，确保程序能稳定运行
-    setupSimpleWidget();
+    // 初始化查看器
+    bronchoscopyViewer->Initialize();
     
-    // 延迟初始化VTK组件
-    QTimer::singleShot(2000, this, &MainWindow::setupVTKWidget);
+    // 设置双窗口界面
+    setupDualViewWidget();
+    
+    // 设置自动播放定时器
+    autoPlayTimer = new QTimer(this);
+    connect(autoPlayTimer, &QTimer::timeout, this, &MainWindow::navigateNext);
 }
 
 MainWindow::~MainWindow()
@@ -43,95 +61,381 @@ MainWindow::~MainWindow()
 
 void MainWindow::createActions()
 {
-    // 退出动作
+    // 文件菜单动作
+    loadModelAct = new QAction("加载气管模型(&M)...", this);
+    loadModelAct->setShortcut(QKeySequence("Ctrl+M"));
+    loadModelAct->setStatusTip("加载气管模型文件 (.vtk, .vtp, .stl)");
+    connect(loadModelAct, &QAction::triggered, this, &MainWindow::loadAirwayModel);
+    
+    loadPathAct = new QAction("加载相机路径(&P)...", this);
+    loadPathAct->setShortcut(QKeySequence("Ctrl+P"));
+    loadPathAct->setStatusTip("加载相机路径文件 (.txt, .csv)");
+    connect(loadPathAct, &QAction::triggered, this, &MainWindow::loadCameraPath);
+    
     exitAct = new QAction("退出(&Q)", this);
     exitAct->setShortcuts(QKeySequence::Quit);
     exitAct->setStatusTip("退出应用程序");
     connect(exitAct, &QAction::triggered, this, &QWidget::close);
-
-    // 关于动作
+    
+    // 导航菜单动作
+    nextAct = new QAction("前进(&N)", this);
+    nextAct->setShortcut(QKeySequence("Right"));
+    nextAct->setStatusTip("沿路径前进");
+    nextAct->setEnabled(false);
+    connect(nextAct, &QAction::triggered, this, &MainWindow::navigateNext);
+    
+    previousAct = new QAction("后退(&B)", this);
+    previousAct->setShortcut(QKeySequence("Left"));
+    previousAct->setStatusTip("沿路径后退");
+    previousAct->setEnabled(false);
+    connect(previousAct, &QAction::triggered, this, &MainWindow::navigatePrevious);
+    
+    resetAct = new QAction("重置(&R)", this);
+    resetAct->setShortcut(QKeySequence("Home"));
+    resetAct->setStatusTip("回到路径起点");
+    resetAct->setEnabled(false);
+    connect(resetAct, &QAction::triggered, this, &MainWindow::resetNavigation);
+    
+    playAct = new QAction("播放/暂停(&P)", this);
+    playAct->setShortcut(QKeySequence("Space"));
+    playAct->setStatusTip("自动播放路径");
+    playAct->setEnabled(false);
+    playAct->setCheckable(true);
+    connect(playAct, &QAction::triggered, this, &MainWindow::toggleAutoPlay);
+    
+    // 帮助菜单动作
     aboutAct = new QAction("关于(&A)", this);
-    aboutAct->setStatusTip("显示应用程序的关于对话框");
+    aboutAct->setStatusTip("显示关于对话框");
     connect(aboutAct, &QAction::triggered, [this]() {
-        QMessageBox::about(this, "关于 VTK Qt 项目",
-                          "这是一个基于VTK和Qt的3D可视化项目。\n使用静态库进行VTK渲染。");
+        QMessageBox::about(this, "关于支气管腔镜可视化",
+                          "支气管腔镜可视化系统\n\n"
+                          "功能特点：\n"
+                          "- 双窗口显示（全局视图 + 内窥镜视图）\n"
+                          "- 相机路径导航\n"
+                          "- 实时位置跟踪\n\n"
+                          "基于VTK和Qt开发");
     });
-
-    // 创建球体动作
-    sphereAct = new QAction("创建球体(&S)", this);
-    sphereAct->setStatusTip("在场景中创建一个球体");
-    connect(sphereAct, &QAction::triggered, this, &MainWindow::createSphere);
 }
 
 void MainWindow::createMenus()
 {
+    // 文件菜单
     fileMenu = menuBar()->addMenu("文件(&F)");
+    fileMenu->addAction(loadModelAct);
+    fileMenu->addAction(loadPathAct);
+    fileMenu->addSeparator();
     fileMenu->addAction(exitAct);
-
+    
+    // 导航菜单
+    navigationMenu = menuBar()->addMenu("导航(&N)");
+    navigationMenu->addAction(previousAct);
+    navigationMenu->addAction(nextAct);
+    navigationMenu->addAction(resetAct);
+    navigationMenu->addSeparator();
+    navigationMenu->addAction(playAct);
+    
+    // 视图菜单
+    viewMenu = menuBar()->addMenu("视图(&V)");
+    QAction* showPathAct = viewMenu->addAction("显示路径");
+    showPathAct->setCheckable(true);
+    showPathAct->setChecked(true);
+    connect(showPathAct, &QAction::toggled, [this](bool checked) {
+        bronchoscopyViewer->ShowPath(checked);
+    });
+    
+    QAction* showMarkerAct = viewMenu->addAction("显示位置标记");
+    showMarkerAct->setCheckable(true);
+    showMarkerAct->setChecked(true);
+    connect(showMarkerAct, &QAction::toggled, [this](bool checked) {
+        bronchoscopyViewer->ShowPositionMarker(checked);
+    });
+    
+    // 帮助菜单
     helpMenu = menuBar()->addMenu("帮助(&H)");
     helpMenu->addAction(aboutAct);
 }
 
 void MainWindow::createToolBars()
 {
+    // 文件工具栏
     fileToolBar = addToolBar("文件");
-    fileToolBar->addAction(sphereAct);
-    fileToolBar->addAction(exitAct);
+    fileToolBar->addAction(loadModelAct);
+    fileToolBar->addAction(loadPathAct);
+    
+    // 导航工具栏
+    navigationToolBar = addToolBar("导航");
+    navigationToolBar->addAction(previousAct);
+    navigationToolBar->addAction(nextAct);
+    navigationToolBar->addAction(resetAct);
+    navigationToolBar->addSeparator();
+    navigationToolBar->addAction(playAct);
 }
 
 void MainWindow::createStatusBar()
 {
-    statusBar()->showMessage("就绪");
+    statusLabel = new QLabel("就绪");
+    statusBar()->addPermanentWidget(statusLabel);
+    statusBar()->showMessage("请加载气管模型和相机路径", 3000);
 }
 
-void MainWindow::setupSimpleWidget()
+void MainWindow::setupDualViewWidget()
 {
-    QLabel *label = new QLabel("VTK Qt 项目正在初始化...", this);
-    label->setAlignment(Qt::AlignCenter);
-    label->setStyleSheet("QLabel { font-size: 18px; color: blue; }");
-    setCentralWidget(label);
-    statusBar()->showMessage("简单界面创建成功", 2000);
+    // 创建两个VTK窗口
+    overviewWidget = new QVTKOpenGLWidget(this);
+    endoscopeWidget = new QVTKOpenGLWidget(this);
+    
+    // 创建分割器
+    QSplitter *splitter = new QSplitter(Qt::Horizontal);
+    
+    // 左侧：全局视图
+    QWidget *leftPanel = new QWidget();
+    QVBoxLayout *leftLayout = new QVBoxLayout(leftPanel);
+    QLabel *leftLabel = new QLabel("全局视图");
+    leftLabel->setAlignment(Qt::AlignCenter);
+    leftLabel->setFixedHeight(25);  // 固定标签高度
+    leftLabel->setStyleSheet("font-weight: bold; font-size: 12px; padding: 3px; background-color: #e0e0e0; border: 1px solid #ccc;");
+    leftLayout->addWidget(leftLabel);
+    leftLayout->addWidget(overviewWidget, 1);  // 添加stretch因子，让VTK窗口占据剩余空间
+    leftLayout->setContentsMargins(0, 0, 0, 0);
+    leftLayout->setSpacing(0);
+    
+    // 右侧：内窥镜视图
+    QWidget *rightPanel = new QWidget();
+    QVBoxLayout *rightLayout = new QVBoxLayout(rightPanel);
+    QLabel *rightLabel = new QLabel("内窥镜视图");
+    rightLabel->setAlignment(Qt::AlignCenter);
+    rightLabel->setFixedHeight(25);  // 固定标签高度
+    rightLabel->setStyleSheet("font-weight: bold; font-size: 12px; padding: 3px; background-color: #e0e0e0; border: 1px solid #ccc;");
+    rightLayout->addWidget(rightLabel);
+    rightLayout->addWidget(endoscopeWidget, 1);  // 添加stretch因子，让VTK窗口占据剩余空间
+    rightLayout->setContentsMargins(0, 0, 0, 0);
+    rightLayout->setSpacing(0);
+    
+    // 添加到分割器
+    splitter->addWidget(leftPanel);
+    splitter->addWidget(rightPanel);
+    splitter->setSizes(QList<int>() << 600 << 600);
+    
+    // 设置为中央部件
+    setCentralWidget(splitter);
+    
+    // 连接渲染窗口到查看器
+    bronchoscopyViewer->SetOverviewRenderWindow(overviewWidget->GetRenderWindow());
+    bronchoscopyViewer->SetEndoscopeRenderWindow(endoscopeWidget->GetRenderWindow());
+    
+    // 初始渲染
+    bronchoscopyViewer->Render();
 }
 
-void MainWindow::setupVTKWidget()
+void MainWindow::loadAirwayModel()
 {
-    try {
-        statusBar()->showMessage("正在初始化VTK...", 1000);
-
-        // 步骤1：创建QVTKOpenGLWidget
-        vtkWidget = new QVTKOpenGLWidget(this);
-        setCentralWidget(vtkWidget);
-
-        // 步骤2：初始化静态库中的渲染器
-        vtkRenderer->InitializeRenderer();
-        vtkRenderer->SetBackground(0.1, 0.2, 0.4); // 深蓝色背景
-
-        // 步骤3：将渲染器与QVTKOpenGLWidget连接
-        vtkRenderWindow* renderWindow = vtkWidget->GetRenderWindow();
-        vtkRenderer->SetRenderWindow(renderWindow);
-
-        statusBar()->showMessage("VTK集成到Qt界面成功！", 2000);
-    } catch (const std::exception& e) {
-        QMessageBox::warning(this, "警告", QString("VTK初始化失败: %1").arg(e.what()));
-        statusBar()->showMessage("VTK初始化失败", 3000);
+    QString fileName = QFileDialog::getOpenFileName(this,
+        "选择气管模型文件", 
+        "",
+        "3D模型文件 (*.vtk *.vtp *.stl);;VTK文件 (*.vtk);;VTP文件 (*.vtp);;STL文件 (*.stl);;所有文件 (*)");
+    
+    if (fileName.isEmpty()) return;
+    
+    // 主程序负责文件读取
+    vtkSmartPointer<vtkPolyData> polyData;
+    std::string fileStr = fileName.toStdString();
+    
+    if (fileName.endsWith(".vtk", Qt::CaseInsensitive)) {
+        vtkSmartPointer<vtkPolyDataReader> reader = vtkSmartPointer<vtkPolyDataReader>::New();
+        reader->SetFileName(fileStr.c_str());
+        reader->Update();
+        polyData = reader->GetOutput();
+    } else if (fileName.endsWith(".vtp", Qt::CaseInsensitive)) {
+        vtkSmartPointer<vtkXMLPolyDataReader> reader = vtkSmartPointer<vtkXMLPolyDataReader>::New();
+        reader->SetFileName(fileStr.c_str());
+        reader->Update();
+        polyData = reader->GetOutput();
+    } else if (fileName.endsWith(".stl", Qt::CaseInsensitive)) {
+        vtkSmartPointer<vtkSTLReader> reader = vtkSmartPointer<vtkSTLReader>::New();
+        reader->SetFileName(fileStr.c_str());
+        reader->Update();
+        polyData = reader->GetOutput();
+    } else {
+        QMessageBox::warning(this, "加载失败", "不支持的文件格式");
+        return;
+    }
+    
+    // 传递数据给静态库
+    if (polyData && bronchoscopyViewer->LoadAirwayModel(polyData)) {
+        // 触发Qt的重绘事件，而不是直接调用VTK的Render
+        overviewWidget->update();
+        endoscopeWidget->update();
+        statusBar()->showMessage(QString("成功加载模型: %1").arg(fileName), 3000);
+        statusLabel->setText("模型已加载");
+    } else {
+        QMessageBox::warning(this, "加载失败", "无法加载模型文件");
+        statusBar()->showMessage("模型加载失败", 3000);
     }
 }
 
-void MainWindow::createSphere()
+void MainWindow::loadCameraPath()
 {
-    try {
-        // 使用静态库创建球体
-        vtkRenderer->CreateSphere(1.0, 20, 20);
+    QString fileName = QFileDialog::getOpenFileName(this,
+        "选择相机路径文件",
+        "",
+        "路径文件 (*.txt *.csv);;文本文件 (*.txt);;CSV文件 (*.csv);;所有文件 (*)");
+    
+    if (fileName.isEmpty()) return;
+    
+    // 主程序负责文件读取
+    std::ifstream file(fileName.toStdString());
+    if (!file.is_open()) {
+        QMessageBox::warning(this, "加载失败", "无法打开文件");
+        return;
+    }
+    
+    std::vector<double> positions;
+    std::string line;
+    
+    while (std::getline(file, line)) {
+        if (line.empty() || line[0] == '#') continue;  // 跳过空行和注释
         
-        // 重置相机
-        vtkRenderer->ResetCamera();
+        std::istringstream iss(line);
+        double x, y, z;
+        char comma;
         
-        // 渲染
-        vtkRenderer->Render();
+        // 支持两种格式：
+        // 格式1: x, y, z （只有位置）
+        // 格式2: x, y, z, dx, dy, dz （位置和方向，但忽略方向）
+        
+        if (line.find(',') != std::string::npos) {
+            // 逗号分隔
+            iss >> x >> comma >> y >> comma >> z;
+        } else {
+            // 空格分隔
+            iss >> x >> y >> z;
+        }
+        
+        if (!iss.fail()) {
+            positions.push_back(x);
+            positions.push_back(y);
+            positions.push_back(z);
+        }
+    }
+    
+    file.close();
+    
+    // 传递数据给静态库（只传递位置，方向自动计算）
+    if (!positions.empty() && bronchoscopyViewer->LoadCameraPath(positions)) {
+        // 触发Qt的重绘事件，而不是直接调用VTK的Render
+        overviewWidget->update();
+        endoscopeWidget->update();
+        int total = bronchoscopyViewer->GetTotalPathNodes();
+        statusBar()->showMessage(QString("成功加载路径: %1 (%2个节点)").arg(fileName).arg(total), 3000);
+        statusLabel->setText(QString("路径: 1/%1").arg(total));
+        
+        // 启用导航控制
+        nextAct->setEnabled(true);
+        previousAct->setEnabled(true);
+        resetAct->setEnabled(true);
+        playAct->setEnabled(true);
+    } else {
+        QMessageBox::warning(this, "加载失败", "无法加载路径文件，请检查文件格式\n需要至少2个点");
+        statusBar()->showMessage("路径加载失败", 3000);
+    }
+}
 
-        statusBar()->showMessage("球体已创建", 2000);
-    } catch (const std::exception& e) {
-        QMessageBox::warning(this, "警告", QString("创建球体失败: %1").arg(e.what()));
-        statusBar()->showMessage("创建球体失败", 3000);
+void MainWindow::navigateNext()
+{
+    bronchoscopyViewer->MoveToNext();
+    // 触发Qt的重绘事件
+    overviewWidget->update();
+    endoscopeWidget->update();
+    int current = bronchoscopyViewer->GetCurrentPathIndex() + 1;
+    int total = bronchoscopyViewer->GetTotalPathNodes();
+    statusLabel->setText(QString("路径: %1/%2").arg(current).arg(total));
+    
+    // 调试输出
+    qDebug() << "Current index:" << (current-1) << "Total nodes:" << total;
+    
+    // 如果到达末尾，停止自动播放
+    if (current >= total && isPlaying) {
+        toggleAutoPlay();
+    }
+}
+
+void MainWindow::navigatePrevious()
+{
+    bronchoscopyViewer->MoveToPrevious();
+    // 触发Qt的重绘事件
+    overviewWidget->update();
+    endoscopeWidget->update();
+    int current = bronchoscopyViewer->GetCurrentPathIndex() + 1;
+    int total = bronchoscopyViewer->GetTotalPathNodes();
+    statusLabel->setText(QString("路径: %1/%2").arg(current).arg(total));
+}
+
+void MainWindow::resetNavigation()
+{
+    bronchoscopyViewer->ResetToStart();
+    // 触发Qt的重绘事件
+    overviewWidget->update();
+    endoscopeWidget->update();
+    int total = bronchoscopyViewer->GetTotalPathNodes();
+    statusLabel->setText(QString("路径: 1/%1").arg(total));
+    
+    // 停止自动播放
+    if (isPlaying) {
+        toggleAutoPlay();
+    }
+}
+
+void MainWindow::toggleAutoPlay()
+{
+    isPlaying = !isPlaying;
+    
+    if (isPlaying) {
+        autoPlayTimer->start(100); // 每100ms前进一步
+        statusBar()->showMessage("开始自动播放", 2000);
+        playAct->setText("暂停(&P)");
+    } else {
+        autoPlayTimer->stop();
+        statusBar()->showMessage("停止自动播放", 2000);
+        playAct->setText("播放(&P)");
+    }
+}
+
+void MainWindow::keyPressEvent(QKeyEvent *event)
+{
+    switch (event->key()) {
+        case Qt::Key_Right:
+        case Qt::Key_Up:
+            if (nextAct->isEnabled()) navigateNext();
+            break;
+        case Qt::Key_Left:
+        case Qt::Key_Down:
+            if (previousAct->isEnabled()) navigatePrevious();
+            break;
+        case Qt::Key_Home:
+            if (resetAct->isEnabled()) resetNavigation();
+            break;
+        case Qt::Key_Space:
+            if (playAct->isEnabled()) toggleAutoPlay();
+            break;
+        case Qt::Key_Plus:
+            if (autoPlayTimer && isPlaying) {
+                int interval = autoPlayTimer->interval();
+                if (interval > 20) {
+                    autoPlayTimer->setInterval(interval - 20);
+                    statusBar()->showMessage(QString("播放速度: %1ms").arg(interval - 20), 1000);
+                }
+            }
+            break;
+        case Qt::Key_Minus:
+            if (autoPlayTimer && isPlaying) {
+                int interval = autoPlayTimer->interval();
+                if (interval < 1000) {
+                    autoPlayTimer->setInterval(interval + 20);
+                    statusBar()->showMessage(QString("播放速度: %1ms").arg(interval + 20), 1000);
+                }
+            }
+            break;
+        default:
+            QMainWindow::keyPressEvent(event);
     }
 }

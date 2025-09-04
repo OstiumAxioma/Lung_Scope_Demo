@@ -2,7 +2,7 @@
 chcp 65001 > nul
 
 echo ========================================
-echo TemplateLib Static Library Build Script
+echo BronchoscopyLib Static Library Build Script
 echo ========================================
 echo.
 
@@ -72,7 +72,7 @@ if exist bin rmdir /s /q bin 2>nul
 if exist lib rmdir /s /q lib 2>nul
 
 :: 清理Visual Studio和CMake的中间文件
-if exist TemplateLib.dir rmdir /s /q TemplateLib.dir 2>nul
+if exist BronchoscopyLib.dir rmdir /s /q BronchoscopyLib.dir 2>nul
 if exist *.exp del /q *.exp 2>nul
 if exist *.ilk del /q *.ilk 2>nul
 if exist *.pdb del /q *.pdb 2>nul
@@ -97,7 +97,7 @@ if not "%~2"=="" (
 )
 
 :: 配置项目
-echo Configuring TemplateLib project...
+echo Configuring BronchoscopyLib project...
 echo Running: cmake .. %CMAKE_ARGS%
 cmake .. %CMAKE_ARGS%
 
@@ -162,29 +162,29 @@ echo Copying static library files to ..\lib...
 
 :: 复制Release版本（如果编译了）
 if %BUILD_RELEASE%==1 (
-    if exist "build\lib\Release\TemplateLib.lib" (
-        copy /Y "build\lib\Release\TemplateLib.lib" "..\lib\TemplateLib.lib" >nul
+    if exist "build\lib\Release\BronchoscopyLib.lib" (
+        copy /Y "build\lib\Release\BronchoscopyLib.lib" "..\lib\BronchoscopyLib.lib" >nul
         if not errorlevel 1 (
-            echo  - TemplateLib.lib ^(Release^) copied successfully
+            echo  - BronchoscopyLib.lib ^(Release^) copied successfully
         ) else (
-            echo  - ERROR: Failed to copy TemplateLib.lib
+            echo  - ERROR: Failed to copy BronchoscopyLib.lib
         )
     ) else (
-        echo  - Warning: Release version of TemplateLib.lib not found at build\lib\Release\
+        echo  - Warning: Release version of BronchoscopyLib.lib not found at build\lib\Release\
     )
 )
 
 :: 复制Debug版本（如果编译了）
 if %BUILD_DEBUG%==1 (
-    if exist "build\lib\Debug\TemplateLib.lib" (
-        copy /Y "build\lib\Debug\TemplateLib.lib" "..\lib\TemplateLib_d.lib" >nul
+    if exist "build\lib\Debug\BronchoscopyLib.lib" (
+        copy /Y "build\lib\Debug\BronchoscopyLib.lib" "..\lib\BronchoscopyLib_d.lib" >nul
         if not errorlevel 1 (
-            echo  - TemplateLib_d.lib ^(Debug^) copied successfully
+            echo  - BronchoscopyLib_d.lib ^(Debug^) copied successfully
         ) else (
-            echo  - ERROR: Failed to copy TemplateLib_d.lib
+            echo  - ERROR: Failed to copy BronchoscopyLib_d.lib
         )
     ) else (
-        echo  - Warning: Debug version of TemplateLib.lib not found at build\lib\Debug\
+        echo  - Warning: Debug version of BronchoscopyLib.lib not found at build\lib\Debug\
     )
 )
 
@@ -198,19 +198,16 @@ if not exist "..\header" (
 :: 复制头文件到根目录的header文件夹
 echo.
 echo Copying header files to ..\header...
-if exist "header\template.h" (
-    copy /Y "header\template.h" "..\header\template.h" >nul
+if exist "header\BronchoscopyViewer.h" (
+    copy /Y "header\BronchoscopyViewer.h" "..\header\BronchoscopyViewer.h" >nul
     if not errorlevel 1 (
-        echo  - template.h copied successfully
+        echo  - BronchoscopyViewer.h copied successfully
     ) else (
-        echo  - ERROR: Failed to copy template.h
+        echo  - ERROR: Failed to copy BronchoscopyViewer.h
     )
 ) else (
-    echo  - Warning: template.h not found at header\
+    echo  - Warning: BronchoscopyViewer.h not found at header\
 )
-
-:: 可选：复制所有头文件（如果有多个）
-:: xcopy /Y /S "header\*.h" "..\header\" >nul 2>&1
 
 echo.
 echo ========================================

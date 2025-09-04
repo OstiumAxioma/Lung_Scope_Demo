@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(TemplateLib CXX)
+project(BronchoscopyLib CXX)
 
 # 加载本地配置文件（如果存在）
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/config.local.cmake")
@@ -86,56 +86,58 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 
 # 收集源文件
 set(SOURCES
-    src/template.cpp
+    src/BronchoscopyViewer.cpp
+    src/CameraPath.cpp
 )
 
 set(HEADERS
-    header/template.h
+    header/BronchoscopyViewer.h
+    header/CameraPath.h
 )
 
 # 创建静态库
-add_library(TemplateLib STATIC ${SOURCES} ${HEADERS})
+add_library(BronchoscopyLib STATIC ${SOURCES} ${HEADERS})
 
 # 设置包含目录
-target_include_directories(TemplateLib PUBLIC
+target_include_directories(BronchoscopyLib PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/header
     ${VTK_INCLUDE_DIRS}
 )
 
 # 链接VTK库
-target_link_libraries(TemplateLib PUBLIC ${VTK_LIBRARIES})
+target_link_libraries(BronchoscopyLib PUBLIC ${VTK_LIBRARIES})
 
 # Windows特定设置
 if(WIN32)
     # 定义预处理器宏
-    target_compile_definitions(TemplateLib PRIVATE
+    target_compile_definitions(BronchoscopyLib PRIVATE
         _WINDOWS
         _UNICODE
         UNICODE
     )
     
     # 设置编译选项
-    target_compile_options(TemplateLib PRIVATE
+    target_compile_options(BronchoscopyLib PRIVATE
         /W3     # 警告级别3
         /EHsc   # 启用C++异常处理
         /MP     # 多处理器编译
     )
     
     # Release配置优化
-    target_compile_options(TemplateLib PRIVATE
+    target_compile_options(BronchoscopyLib PRIVATE
         $<$<CONFIG:Release>:/O2>    # 最大优化
         $<$<CONFIG:Release>:/GL>    # 全程序优化
     )
     
     # Debug配置
-    target_compile_options(TemplateLib PRIVATE
+    target_compile_options(BronchoscopyLib PRIVATE
         $<$<CONFIG:Debug>:/Od>      # 禁用优化
         $<$<CONFIG:Debug>:/Zi>      # 生成调试信息
     )
 endif()
 
 # 显示配置信息
-message(STATUS "Building TemplateLib Static Library with VTK support")
+message(STATUS "Building BronchoscopyLib Static Library with VTK support")
 message(STATUS "VTK_VERSION: ${VTK_VERSION}")
 message(STATUS "VTK_USE_FILE: ${VTK_USE_FILE}")
 message(STATUS "Output directory: ${CMAKE_ARCHIVE_OUTPUT_DIRECTORY}")
