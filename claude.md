@@ -1,39 +1,111 @@
-# 项目结构
+# 支气管镜导航可视化系统 - 项目记录
 
-## 编译架构
-- **主程序**: `D:\Project\Lung_demo\` → 生成 `build\Exe\VTK_Qt_Project.exe`
-- **静态库**: `D:\Project\Lung_demo\static\` → 生成 `static\build\lib\TemplateLib.lib`
+## 项目概述
+基于VTK 8.2.0和Qt 5.12.9的支气管镜导航可视化系统，用于显示气管3D模型并模拟内窥镜导航。
+
+## 核心设计决策
+
+### 1. 架构设计
+- **静态库架构**: 核心功能封装在BronchoscopyLib静态库中
+- **单场景双相机**: 不是双渲染器，而是使用同一个场景的两个不同相机视角
+- **数据处理分离**: 静态库绝不处理文件I/O，所有文件操作由主程序完成
+
+### 2. 关键实现细节
+
+#### 文件I/O分离
+```cpp
+// 错误示例（静态库不应该这样做）
+bool LoadModel(const std::string& filePath); // ❌
+
+// 正确示例（静态库只接收数据）
+bool LoadAirwayModel(vtkPolyData* polyData); // ✅
+```
+
+#### 路径方向自动计算
+- 输入：只需要点序列 `std::vector<double> positions`
+- 方向计算：
+  - 中间点：方向指向下一个点
+  - 末尾点：使用前一个点的方向
+  - 归一化处理
+
+#### 红球位置更新（重要修复）
+```cpp
+// 错误方式（会导致渲染问题）
+positionMarker->SetCenter(current->position); // ❌
+
+// 正确方式（只移动actor）
+markerActor->SetPosition(current->position); // ✅
+```
+
+## 主要问题和解决历程
+
+### 1. 函数命名冲突
+- **问题**: 两个LoadCameraPath函数（public和private）造成混淆
+- **解决**: 私有方法重命名为ApplyCameraPath
+
+### 2. 标签大小问题
+- **问题**: 标签占满整个窗口
+- **解决**: 使用setFixedHeight(25)而非setFixedHeight(600)
+
+### 3. 渲染刷新问题（未完全解决）
+- **现象**: 加载后需要手动操作视图才能看到内容
+- **尝试的方案**:
+  - 直接调用Render() - 导致模型消失
+  - 使用Qt的update() - 无效
+  - 使用交互器的Render() - 仍有问题
+- **当前状态**: 需要用户手动操作视图触发渲染
+
+### 4. 内存管理
+- **问题**: VTK智能指针返回原始指针导致崩溃
+- **解决**: 使用Register/UnRegister手动管理引用计数
+
+### 5. Actor更新问题
+- **问题**: 修改SphereSource导致渲染混乱
+- **解决**: 保持数据源不变，只移动actor位置
+
+## 文件结构
+
+### 静态库（/static）
+- `BronchoscopyViewer.h/cpp`: 主视图管理器，处理双窗口渲染
+- `CameraPath.h/cpp`: 相机路径管理，使用双向链表
+
+### 主程序（/src, /header）
+- `mainwindow.cpp`: 处理所有文件I/O，包括模型和路径加载
+- 使用QSplitter实现双窗口布局
+
+## 关键类接口
+
+### BronchoscopyViewer
+- `Initialize()`: 初始化标记和渲染器
+- `LoadAirwayModel(vtkPolyData*)`: 加载3D模型数据
+- `LoadCameraPath(std::vector<double>&)`: 加载路径点序列
+- `MoveToNext/Previous()`: 导航控制
+- `GetOverviewRenderer/GetEndoscopeRenderer()`: 获取渲染器
+
+### CameraPath
+- 双向链表实现
+- `AddPoint()`: 添加路径点
+- `MoveNext/Previous()`: 链表导航
+- `GeneratePathTube()`: 生成可视化路径
+
+## 待解决问题
+
+1. **渲染刷新机制**: 需要找到正确的方式在数据加载后自动刷新显示
+2. **链表导航问题**: 在某些点之间可能出现循环
+3. **内窥镜相机初始化**: 右视图相机可能未正确显示
+
+## 重要提醒
+
+1. **永远不要在静态库中进行文件I/O操作**
+2. **修改actor位置而非数据源**
+3. **路径必须至少包含2个点**
+4. **VTK引用计数需要特别注意**
+
+## 测试数据
+- `path_l.txt`: 包含12个路径点的测试文件
+- 格式: 每行三个数字（x y z），空格分隔
 
 ## 编译步骤
-1. `cd static && build.bat` - 编译静态库
-2. 拷贝 `static\build\lib\TemplateLib*.lib` → `lib\`
-3. `build.bat` - 编译主程序
-
-## 关键文件
-### 主程序
-- `src/main.cpp` - 程序入口
-- `src/mainwindow.cpp` - Qt窗口实现
-- `header/mainwindow.h` - Qt窗口接口
-
-### 静态库
-- `static/src/template.cpp` - 核心功能实现
-- `static/header/template.h` - 对外接口
-
-## 依赖
-- Qt5 (Core, Gui, Widgets)
-- VTK 8.2
-- MSVC编译器
-
-## 开发任务
-### 支气管腔镜可视化
-1. **双窗口显示**
-   - 左: 气管模型正视图 + 相机位置/路径高亮
-   - 右: 腔镜视角（相机内部视图）
-
-2. **数据导入**
-   - 气管模型网格(polydata)
-   - 相机路径点(链表存储)
-
-3. **实现分工**
-   - 主程序: 文件选择UI、用户交互
-   - 静态库: 可视化核心逻辑、数据处理
+1. `cd static && build.bat` (选择3-Both)
+2. `cd .. && build.bat`
+3. 运行: `build/Exe/Release/VTK_Qt_Project.exe`
