@@ -19,6 +19,8 @@
 
 // VTK头文件
 #include <vtkRenderWindow.h>
+#include <vtkGenericOpenGLRenderWindow.h>
+#include <vtkRenderWindowInteractor.h>
 #include <vtkPolyDataReader.h>
 #include <vtkXMLPolyDataReader.h>
 #include <vtkOBJReader.h>
@@ -184,6 +186,10 @@ void MainWindow::setupDualViewWidget()
     overviewWidget = new QVTKOpenGLWidget(this);
     endoscopeWidget = new QVTKOpenGLWidget(this);
     
+    // 强制初始化OpenGL上下文
+    overviewWidget->SetRenderWindow(vtkSmartPointer<vtkGenericOpenGLRenderWindow>::New());
+    endoscopeWidget->SetRenderWindow(vtkSmartPointer<vtkGenericOpenGLRenderWindow>::New());
+    
     // 创建分割器
     QSplitter *splitter = new QSplitter(Qt::Horizontal);
     
@@ -222,6 +228,20 @@ void MainWindow::setupDualViewWidget()
     // 连接渲染窗口到查看器
     bronchoscopyViewer->SetOverviewRenderWindow(overviewWidget->GetRenderWindow());
     bronchoscopyViewer->SetEndoscopeRenderWindow(endoscopeWidget->GetRenderWindow());
+    
+    // 调试：确保渲染窗口和交互器正确连接
+    qDebug() << "Overview RenderWindow:" << overviewWidget->GetRenderWindow();
+    qDebug() << "Overview Interactor:" << overviewWidget->GetInteractor();
+    qDebug() << "Endoscope RenderWindow:" << endoscopeWidget->GetRenderWindow();
+    qDebug() << "Endoscope Interactor:" << endoscopeWidget->GetInteractor();
+    
+    // 确保交互器已初始化
+    if (overviewWidget->GetInteractor()) {
+        overviewWidget->GetInteractor()->Initialize();
+    }
+    if (endoscopeWidget->GetInteractor()) {
+        endoscopeWidget->GetInteractor()->Initialize();
+    }
     
     // 初始渲染
     bronchoscopyViewer->Render();
@@ -264,6 +284,12 @@ void MainWindow::loadAirwayModel()
     if (polyData && bronchoscopyViewer->LoadAirwayModel(polyData)) {
         statusBar()->showMessage(QString("成功加载模型: %1").arg(fileName), 3000);
         statusLabel->setText("模型已加载");
+        
+        // 强制刷新两个视图
+        overviewWidget->GetRenderWindow()->Render();
+        endoscopeWidget->GetRenderWindow()->Render();
+        
+        qDebug() << "Forced render after loading model";
     } else {
         QMessageBox::warning(this, "加载失败", "无法加载模型文件");
         statusBar()->showMessage("模型加载失败", 3000);
@@ -328,6 +354,10 @@ void MainWindow::loadCameraPath()
         previousAct->setEnabled(true);
         resetAct->setEnabled(true);
         playAct->setEnabled(true);
+        
+        // 强制刷新endoscope视图（相机位置已更新）
+        endoscopeWidget->GetRenderWindow()->Render();
+        qDebug() << "Forced render after loading path";
     } else {
         QMessageBox::warning(this, "加载失败", "无法加载路径文件，请检查文件格式\n需要至少2个点");
         statusBar()->showMessage("路径加载失败", 3000);
@@ -344,6 +374,9 @@ void MainWindow::navigateNext()
     // 调试输出
     qDebug() << "Current index:" << (current-1) << "Total nodes:" << total;
     
+    // 强制刷新endoscope视图
+    endoscopeWidget->GetRenderWindow()->Render();
+    
     // 如果到达末尾，停止自动播放
     if (current >= total && isPlaying) {
         toggleAutoPlay();
@@ -356,6 +389,9 @@ void MainWindow::navigatePrevious()
     int current = bronchoscopyViewer->GetCurrentPathIndex() + 1;
     int total = bronchoscopyViewer->GetTotalPathNodes();
     statusLabel->setText(QString("路径: %1/%2").arg(current).arg(total));
+    
+    // 强制刷新endoscope视图
+    endoscopeWidget->GetRenderWindow()->Render();
 }
 
 void MainWindow::resetNavigation()

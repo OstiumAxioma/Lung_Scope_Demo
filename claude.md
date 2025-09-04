@@ -115,3 +115,35 @@ markerActor->SetPosition(current->position); // ✅
   - 修改文件: `src/mainwindow.cpp`
   - 包含 `vtkOBJReader.h` 替代 `vtkSTLReader.h`
   - 更新文件对话框过滤器
+
+## Bug修复记录
+
+### 1. 内窥镜视图黑屏问题
+**症状**: 右侧endoscope视图始终黑屏，左侧视图模型在移动后消失  
+**原因**: polyData直接赋值而非深拷贝；两个Actor共享同一个Mapper  
+**修复**: 使用`DeepCopy`；为每个Actor创建独立的Mapper  
+**文件**: `static/src/BronchoscopyViewer.cpp:196-220`
+
+### 2. 红球位置更新问题
+**症状**: 红色位置标记需要手动旋转视图才更新  
+**原因**: 修改SphereSource的中心位置导致渲染混乱  
+**修复**: 保持SphereSource在原点，通过`actor->SetPosition()`移动  
+**文件**: `static/src/BronchoscopyViewer.cpp:115`
+
+### 3. 标签占满窗口问题
+**症状**: 视图标签占据整个窗口高度  
+**原因**: 错误使用`setFixedHeight(600)`  
+**修复**: 改为`setFixedHeight(25)`  
+**文件**: `src/mainwindow.cpp:195,207`
+
+### 4. 编译错误：const方法调用非const
+**症状**: GetInterpolatedDirection中调用NormalizeVector编译失败  
+**原因**: const方法不能调用非const的NormalizeVector  
+**修复**: 内联归一化计算代码  
+**文件**: `static/src/CameraPath.cpp:247-252`
+
+### 5. 路径加载崩溃
+**症状**: 加载路径文件时程序崩溃  
+**原因**: VTK对象引用计数管理错误  
+**修复**: 使用`Register/UnRegister`手动管理引用计数  
+**文件**: `static/src/CameraPath.cpp:148,165-167`
