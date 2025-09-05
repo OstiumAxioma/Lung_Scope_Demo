@@ -1,5 +1,7 @@
 #include "BronchoscopyViewer.h"
 #include "CameraPath.h"
+#include "CameraController.h"
+#include "ModelManager.h"
 
 // VTK头文件
 #include <vtkSmartPointer.h>
@@ -39,15 +41,11 @@ namespace BronchoscopyLib {
         vtkSmartPointer<vtkRenderWindow> overviewWindow;
         vtkSmartPointer<vtkRenderWindow> endoscopeWindow;
         
-        // 相机
-        vtkSmartPointer<vtkCamera> overviewCamera;
-        vtkSmartPointer<vtkCamera> endoscopeCamera;
+        // 相机控制器
+        std::unique_ptr<CameraController> cameraController;
         
-        // 模型数据
-        vtkSmartPointer<vtkPolyData> airwayModel;
-        vtkSmartPointer<vtkPolyDataMapper> modelMapper;
-        vtkSmartPointer<vtkActor> modelActorForOverview;
-        vtkSmartPointer<vtkActor> modelActorForEndoscope;
+        // 模型管理器
+        std::unique_ptr<ModelManager> modelManager;
         
         // 路径可视化
         CameraPath* cameraPath;
@@ -71,13 +69,14 @@ namespace BronchoscopyLib {
             overviewRenderer = vtkSmartPointer<vtkRenderer>::New();
             endoscopeRenderer = vtkSmartPointer<vtkRenderer>::New();
             
-            // 创建相机
-            overviewCamera = vtkSmartPointer<vtkCamera>::New();
-            endoscopeCamera = vtkSmartPointer<vtkCamera>::New();
+            // 创建相机控制器
+            cameraController = std::make_unique<CameraController>();
             
-            // 设置相机
-            overviewRenderer->SetActiveCamera(overviewCamera);
-            endoscopeRenderer->SetActiveCamera(endoscopeCamera);
+            // 创建模型管理器
+            modelManager = std::make_unique<ModelManager>();
+            
+            // 关联相机到渲染器
+            cameraController->AttachToRenderers(overviewRenderer, endoscopeRenderer);
             
             // 设置背景
             overviewRenderer->SetBackground(0.1, 0.1, 0.2);  // 深蓝色
@@ -85,69 +84,28 @@ namespace BronchoscopyLib {
         }
         
         void UpdateEndoscopeCamera() {
-            if (!cameraPath || !cameraPath->GetCurrent()) return;
+            if (!cameraPath || !cameraPath->GetCurrent() || !cameraController) return;
             
             PathNode* current = cameraPath->GetCurrent();
             
-            // 调试输出：路径点坐标
-            std::cout << "=== UpdateEndoscopeCamera Debug ===" << std::endl;
-            std::cout << "Path point position: (" 
-                      << current->position[0] << ", " 
-                      << current->position[1] << ", " 
-                      << current->position[2] << ")" << std::endl;
-            std::cout << "Path point direction: (" 
-                      << current->direction[0] << ", " 
-                      << current->direction[1] << ", " 
-                      << current->direction[2] << ")" << std::endl;
+            // 使用CameraController更新相机
+            cameraController->UpdateEndoscopeCamera(current);
             
-            // 设置相机位置
-            endoscopeCamera->SetPosition(current->position);
-            
-            // 计算焦点位置（沿着方向向前看）
-            double focalPoint[3];
-            for (int i = 0; i < 3; i++) {
-                focalPoint[i] = current->position[i] + 10.0 * current->direction[i];
+            // 如果需要额外的调试信息，可以保留
+            if (endoscopeRenderer) {
+                // 检查渲染器中的actors
+                vtkActorCollection* actors = endoscopeRenderer->GetActors();
+                std::cout << "Number of actors in endoscope renderer: " 
+                          << actors->GetNumberOfItems() << std::endl;
+                
+                // 获取渲染器的边界
+                double bounds[6];
+                endoscopeRenderer->ComputeVisiblePropBounds(bounds);
+                std::cout << "Visible bounds: [" 
+                          << bounds[0] << ", " << bounds[1] << "] ["
+                          << bounds[2] << ", " << bounds[3] << "] ["
+                          << bounds[4] << ", " << bounds[5] << "]" << std::endl;
             }
-            endoscopeCamera->SetFocalPoint(focalPoint);
-            
-            // 设置上方向（假设Y轴向上）
-            endoscopeCamera->SetViewUp(0, 1, 0);
-            
-            // 设置视场角
-            endoscopeCamera->SetViewAngle(60);
-            
-            // 重置相机裁剪范围
-            endoscopeRenderer->ResetCameraClippingRange();
-            
-            // 调试输出：相机状态
-            double* camPos = endoscopeCamera->GetPosition();
-            double* camFocal = endoscopeCamera->GetFocalPoint();
-            double* camUp = endoscopeCamera->GetViewUp();
-            double* clippingRange = endoscopeCamera->GetClippingRange();
-            
-            std::cout << "Camera position: (" 
-                      << camPos[0] << ", " << camPos[1] << ", " << camPos[2] << ")" << std::endl;
-            std::cout << "Camera focal point: (" 
-                      << camFocal[0] << ", " << camFocal[1] << ", " << camFocal[2] << ")" << std::endl;
-            std::cout << "Camera view up: (" 
-                      << camUp[0] << ", " << camUp[1] << ", " << camUp[2] << ")" << std::endl;
-            std::cout << "Camera FOV: " << endoscopeCamera->GetViewAngle() << std::endl;
-            std::cout << "Camera clipping range: [" 
-                      << clippingRange[0] << ", " << clippingRange[1] << "]" << std::endl;
-            
-            // 检查渲染器中的actors
-            vtkActorCollection* actors = endoscopeRenderer->GetActors();
-            std::cout << "Number of actors in endoscope renderer: " 
-                      << actors->GetNumberOfItems() << std::endl;
-            
-            // 获取渲染器的边界
-            double bounds[6];
-            endoscopeRenderer->ComputeVisiblePropBounds(bounds);
-            std::cout << "Visible bounds: [" 
-                      << bounds[0] << ", " << bounds[1] << "] ["
-                      << bounds[2] << ", " << bounds[3] << "] ["
-                      << bounds[4] << ", " << bounds[5] << "]" << std::endl;
-            std::cout << "===================================" << std::endl;
         }
         
         void UpdatePositionMarker() {
@@ -197,41 +155,15 @@ namespace BronchoscopyLib {
     bool BronchoscopyViewer::LoadAirwayModel(vtkPolyData* polyData) {
         if (!polyData) return false;
         
-        std::cout << "\n=== LoadAirwayModel Debug ===" << std::endl;
-        std::cout << "PolyData points: " << polyData->GetNumberOfPoints() << std::endl;
-        std::cout << "PolyData cells: " << polyData->GetNumberOfCells() << std::endl;
+        // 使用ModelManager加载模型
+        if (!pImpl->modelManager->LoadModel(polyData)) {
+            std::cerr << "Failed to load model in ModelManager" << std::endl;
+            return false;
+        }
         
-        // 深拷贝polyData，确保数据的生命周期独立于外部
-        pImpl->airwayModel = vtkSmartPointer<vtkPolyData>::New();
-        pImpl->airwayModel->DeepCopy(polyData);
+        // 添加Actor到渲染器
+        pImpl->modelManager->AddToRenderers(pImpl->overviewRenderer, pImpl->endoscopeRenderer);
         
-        // 为每个渲染器创建独立的mapper
-        // Overview的mapper
-        vtkSmartPointer<vtkPolyDataMapper> overviewMapper = vtkSmartPointer<vtkPolyDataMapper>::New();
-        overviewMapper->SetInputData(pImpl->airwayModel);
-        overviewMapper->ScalarVisibilityOff();
-        
-        // Endoscope的mapper
-        vtkSmartPointer<vtkPolyDataMapper> endoscopeMapper = vtkSmartPointer<vtkPolyDataMapper>::New();
-        endoscopeMapper->SetInputData(pImpl->airwayModel);
-        endoscopeMapper->ScalarVisibilityOff();
-        
-        // 为overview创建actor
-        pImpl->modelActorForOverview = vtkSmartPointer<vtkActor>::New();
-        pImpl->modelActorForOverview->SetMapper(overviewMapper);
-        pImpl->modelActorForOverview->GetProperty()->SetColor(0.8, 0.8, 0.9);
-        pImpl->modelActorForOverview->GetProperty()->SetOpacity(0.7);
-        
-        // 为endoscope创建actor
-        pImpl->modelActorForEndoscope = vtkSmartPointer<vtkActor>::New();
-        pImpl->modelActorForEndoscope->SetMapper(endoscopeMapper);
-        pImpl->modelActorForEndoscope->GetProperty()->SetColor(0.9, 0.7, 0.7);
-        
-        // 添加到渲染器
-        pImpl->overviewRenderer->AddActor(pImpl->modelActorForOverview);
-        pImpl->endoscopeRenderer->AddActor(pImpl->modelActorForEndoscope);
-        
-        std::cout << "Actors added to renderers" << std::endl;
         std::cout << "Overview renderer actors: " 
                   << pImpl->overviewRenderer->GetActors()->GetNumberOfItems() << std::endl;
         std::cout << "Endoscope renderer actors: " 
@@ -239,45 +171,18 @@ namespace BronchoscopyLib {
         
         // 获取模型边界
         double bounds[6];
-        polyData->GetBounds(bounds);
-        std::cout << "Model bounds: [" 
-                  << bounds[0] << ", " << bounds[1] << "] ["
-                  << bounds[2] << ", " << bounds[3] << "] ["
-                  << bounds[4] << ", " << bounds[5] << "]" << std::endl;
+        pImpl->modelManager->GetModelBounds(bounds);
         
-        // 重置两个相机，让它们都能看到整个模型
-        pImpl->overviewRenderer->ResetCamera();
-        pImpl->endoscopeRenderer->ResetCamera();
+        // 使用CameraController重置相机
+        pImpl->cameraController->ResetCameras(bounds);
         
-        // 调试：打印ResetCamera后的实际结果
-        std::cout << "After ResetCamera for both renderers:" << std::endl;
-        
-        // 获取endoscope相机的裁剪范围
-        double* clipRange = pImpl->endoscopeCamera->GetClippingRange();
-        std::cout << "  Endoscope clipping range: [" << clipRange[0] << ", " << clipRange[1] << "]" << std::endl;
+        // 调试：打印相机状态
+        std::cout << "After ResetCameras:" << std::endl;
+        pImpl->cameraController->PrintCameraStatus();
         
         // 获取endoscope视口的实际大小
         int* size = pImpl->endoscopeRenderer->GetSize();
         std::cout << "  Endoscope renderer size: " << size[0] << " x " << size[1] << std::endl;
-        
-        // 调试输出两个相机的状态
-        std::cout << "Camera object pointers:" << std::endl;
-        std::cout << "  Overview camera: " << pImpl->overviewCamera << std::endl;
-        std::cout << "  Endoscope camera: " << pImpl->endoscopeCamera << std::endl;
-        std::cout << "  Are they the same? " << (pImpl->overviewCamera == pImpl->endoscopeCamera ? "YES" : "NO") << std::endl;
-        
-        // 验证渲染器的ActiveCamera
-        std::cout << "Renderer's active cameras:" << std::endl;
-        std::cout << "  Overview renderer's camera: " << pImpl->overviewRenderer->GetActiveCamera() << std::endl;
-        std::cout << "  Endoscope renderer's camera: " << pImpl->endoscopeRenderer->GetActiveCamera() << std::endl;
-        
-        double* overviewPos = pImpl->overviewCamera->GetPosition();
-        double* endoscopePos = pImpl->endoscopeCamera->GetPosition();
-        std::cout << "After ResetCamera:" << std::endl;
-        std::cout << "  Overview camera position: (" 
-                  << overviewPos[0] << ", " << overviewPos[1] << ", " << overviewPos[2] << ")" << std::endl;
-        std::cout << "  Endoscope camera position: (" 
-                  << endoscopePos[0] << ", " << endoscopePos[1] << ", " << endoscopePos[2] << ")" << std::endl;
         
         std::cout << "=============================" << std::endl;
         
@@ -493,11 +398,16 @@ namespace BronchoscopyLib {
             vtkActorCollection* actors = pImpl->endoscopeRenderer->GetActors();
             std::cout << "  Endoscope renderer has " << actors->GetNumberOfItems() << " actors" << std::endl;
             
-            // 检查相机
-            double* pos = pImpl->endoscopeCamera->GetPosition();
-            double* focal = pImpl->endoscopeCamera->GetFocalPoint();
-            std::cout << "  Camera pos: (" << pos[0] << ", " << pos[1] << ", " << pos[2] << ")" << std::endl;
-            std::cout << "  Camera focal: (" << focal[0] << ", " << focal[1] << ", " << focal[2] << ")" << std::endl;
+            // 检查相机（通过CameraController）
+            if (pImpl->cameraController) {
+                vtkCamera* endoscopeCam = pImpl->cameraController->GetEndoscopeCamera();
+                if (endoscopeCam) {
+                    double* pos = endoscopeCam->GetPosition();
+                    double* focal = endoscopeCam->GetFocalPoint();
+                    std::cout << "  Camera pos: (" << pos[0] << ", " << pos[1] << ", " << pos[2] << ")" << std::endl;
+                    std::cout << "  Camera focal: (" << focal[0] << ", " << focal[1] << ", " << focal[2] << ")" << std::endl;
+                }
+            }
             
             pImpl->endoscopeWindow->Render();
         } else {
@@ -519,15 +429,12 @@ namespace BronchoscopyLib {
     }
 
     void BronchoscopyViewer::ClearModel() {
-        if (pImpl->modelActorForOverview) {
-            pImpl->overviewRenderer->RemoveActor(pImpl->modelActorForOverview);
-            pImpl->modelActorForOverview = nullptr;
+        if (pImpl->modelManager) {
+            // 从渲染器移除Actor
+            pImpl->modelManager->RemoveFromRenderers(pImpl->overviewRenderer, pImpl->endoscopeRenderer);
+            // 清理模型
+            pImpl->modelManager->ClearModel();
         }
-        if (pImpl->modelActorForEndoscope) {
-            pImpl->endoscopeRenderer->RemoveActor(pImpl->modelActorForEndoscope);
-            pImpl->modelActorForEndoscope = nullptr;
-        }
-        pImpl->airwayModel = nullptr;
     }
 
 } // namespace BronchoscopyLib

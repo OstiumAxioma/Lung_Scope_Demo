@@ -88,11 +88,19 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(SOURCES
     src/BronchoscopyViewer.cpp
     src/CameraPath.cpp
+    src/CameraController.cpp
+    src/ModelManager.cpp
+    src/PathVisualization.cpp
+    src/BronchoscopyAPI.cpp
 )
 
 set(HEADERS
     header/BronchoscopyViewer.h
     header/CameraPath.h
+    header/CameraController.h
+    header/ModelManager.h
+    header/PathVisualization.h
+    header/BronchoscopyAPI.h
 )
 
 # 创建静态库

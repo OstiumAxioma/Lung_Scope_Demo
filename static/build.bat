@@ -198,15 +198,15 @@ if not exist "..\header" (
 :: 复制头文件到根目录的header文件夹
 echo.
 echo Copying header files to ..\header...
-if exist "header\BronchoscopyViewer.h" (
-    copy /Y "header\BronchoscopyViewer.h" "..\header\BronchoscopyViewer.h" >nul
+if exist "header\BronchoscopyAPI.h" (
+    copy /Y "header\BronchoscopyAPI.h" "..\header\BronchoscopyAPI.h" >nul
     if not errorlevel 1 (
-        echo  - BronchoscopyViewer.h copied successfully
+        echo  - BronchoscopyAPI.h copied successfully
     ) else (
-        echo  - ERROR: Failed to copy BronchoscopyViewer.h
+        echo  - ERROR: Failed to copy BronchoscopyAPI.h
     )
 ) else (
-    echo  - Warning: BronchoscopyViewer.h not found at header\
+    echo  - Warning: BronchoscopyAPI.h not found at header\
 )
 
 echo.

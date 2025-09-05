@@ -15,7 +15,7 @@
 #include <QDebug>
 
 // 包含静态库头文件
-#include "BronchoscopyViewer.h"
+#include "BronchoscopyAPI.h"
 
 // VTK头文件
 #include <vtkRenderWindow.h>
@@ -36,7 +36,7 @@ MainWindow::MainWindow(QWidget *parent)
     , endoscopeWidget(nullptr)
     , autoPlayTimer(nullptr)
     , isPlaying(false)
-    , bronchoscopyViewer(std::make_unique<BronchoscopyLib::BronchoscopyViewer>())
+    , bronchoscopyAPI(std::make_unique<BronchoscopyLib::BronchoscopyAPI>())
 {
     setWindowTitle("支气管腔镜可视化系统");
     resize(1200, 600);
@@ -46,8 +46,8 @@ MainWindow::MainWindow(QWidget *parent)
     createToolBars();
     createStatusBar();
     
-    // 初始化查看器
-    bronchoscopyViewer->Initialize();
+    // 初始化API
+    bronchoscopyAPI->Initialize();
     
     // 设置双窗口界面
     setupDualViewWidget();
@@ -142,14 +142,14 @@ void MainWindow::createMenus()
     showPathAct->setCheckable(true);
     showPathAct->setChecked(true);
     connect(showPathAct, &QAction::toggled, [this](bool checked) {
-        bronchoscopyViewer->ShowPath(checked);
+        bronchoscopyAPI->ShowPath(checked);
     });
     
     QAction* showMarkerAct = viewMenu->addAction("显示位置标记");
     showMarkerAct->setCheckable(true);
     showMarkerAct->setChecked(true);
     connect(showMarkerAct, &QAction::toggled, [this](bool checked) {
-        bronchoscopyViewer->ShowPositionMarker(checked);
+        bronchoscopyAPI->ShowMarker(checked);
     });
     
     // 帮助菜单
@@ -225,9 +225,9 @@ void MainWindow::setupDualViewWidget()
     // 设置为中央部件
     setCentralWidget(splitter);
     
-    // 连接渲染窗口到查看器
-    bronchoscopyViewer->SetOverviewRenderWindow(overviewWidget->GetRenderWindow());
-    bronchoscopyViewer->SetEndoscopeRenderWindow(endoscopeWidget->GetRenderWindow());
+    // 连接渲染窗口到API
+    bronchoscopyAPI->SetOverviewRenderWindow(overviewWidget->GetRenderWindow());
+    bronchoscopyAPI->SetEndoscopeRenderWindow(endoscopeWidget->GetRenderWindow());
     
     // 调试：确保渲染窗口和交互器正确连接
     qDebug() << "Overview RenderWindow:" << overviewWidget->GetRenderWindow();
@@ -244,7 +244,7 @@ void MainWindow::setupDualViewWidget()
     }
     
     // 初始渲染
-    bronchoscopyViewer->Render();
+    bronchoscopyAPI->Render();
 }
 
 void MainWindow::loadAirwayModel()
@@ -281,7 +281,7 @@ void MainWindow::loadAirwayModel()
     }
     
     // 传递数据给静态库
-    if (polyData && bronchoscopyViewer->LoadAirwayModel(polyData)) {
+    if (polyData && bronchoscopyAPI->LoadAirwayModel(polyData)) {
         statusBar()->showMessage(QString("成功加载模型: %1").arg(fileName), 3000);
         statusLabel->setText("模型已加载");
         
@@ -344,8 +344,8 @@ void MainWindow::loadCameraPath()
     file.close();
     
     // 传递数据给静态库（只传递位置，方向自动计算）
-    if (!positions.empty() && bronchoscopyViewer->LoadCameraPath(positions)) {
-        int total = bronchoscopyViewer->GetTotalPathNodes();
+    if (!positions.empty() && bronchoscopyAPI->LoadCameraPath(positions)) {
+        int total = bronchoscopyAPI->GetTotalPathNodes();
         statusBar()->showMessage(QString("成功加载路径: %1 (%2个节点)").arg(fileName).arg(total), 3000);
         statusLabel->setText(QString("路径: 1/%1").arg(total));
         
@@ -366,9 +366,9 @@ void MainWindow::loadCameraPath()
 
 void MainWindow::navigateNext()
 {
-    bronchoscopyViewer->MoveToNext();
-    int current = bronchoscopyViewer->GetCurrentPathIndex() + 1;
-    int total = bronchoscopyViewer->GetTotalPathNodes();
+    bronchoscopyAPI->MoveToNext();
+    int current = bronchoscopyAPI->GetCurrentNodeIndex() + 1;
+    int total = bronchoscopyAPI->GetTotalPathNodes();
     statusLabel->setText(QString("路径: %1/%2").arg(current).arg(total));
     
     // 调试输出
@@ -385,9 +385,9 @@ void MainWindow::navigateNext()
 
 void MainWindow::navigatePrevious()
 {
-    bronchoscopyViewer->MoveToPrevious();
-    int current = bronchoscopyViewer->GetCurrentPathIndex() + 1;
-    int total = bronchoscopyViewer->GetTotalPathNodes();
+    bronchoscopyAPI->MoveToPrevious();
+    int current = bronchoscopyAPI->GetCurrentNodeIndex() + 1;
+    int total = bronchoscopyAPI->GetTotalPathNodes();
     statusLabel->setText(QString("路径: %1/%2").arg(current).arg(total));
     
     // 强制刷新endoscope视图
@@ -396,8 +396,8 @@ void MainWindow::navigatePrevious()
 
 void MainWindow::resetNavigation()
 {
-    bronchoscopyViewer->ResetToStart();
-    int total = bronchoscopyViewer->GetTotalPathNodes();
+    bronchoscopyAPI->MoveToFirst();
+    int total = bronchoscopyAPI->GetTotalPathNodes();
     statusLabel->setText(QString("路径: 1/%1").arg(total));
     
     // 停止自动播放

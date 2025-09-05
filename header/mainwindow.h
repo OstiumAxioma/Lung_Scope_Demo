@@ -24,7 +24,7 @@ class QVTKOpenGLWidget;
 
 // 前向声明
 namespace BronchoscopyLib {
-    class BronchoscopyViewer;
+    class BronchoscopyAPI;
 }
 
 class MainWindow : public QMainWindow
@@ -77,8 +77,8 @@ private:
     // 状态标签
     QLabel *statusLabel;
     
-    // 使用静态库的支气管镜查看器
-    std::unique_ptr<BronchoscopyLib::BronchoscopyViewer> bronchoscopyViewer;
+    // 使用静态库的支气管镜API
+    std::unique_ptr<BronchoscopyLib::BronchoscopyAPI> bronchoscopyAPI;
     
     // 自动播放定时器
     QTimer *autoPlayTimer;
