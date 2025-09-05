@@ -2,6 +2,9 @@
 #include "CameraController.h"
 #include "ModelManager.h"
 #include "PathVisualization.h"
+#include "RenderingEngine.h"
+#include "NavigationController.h"
+#include "SceneManager.h"
 #include "CameraPath.h"
 
 // VTK headers
@@ -17,59 +20,33 @@ namespace BronchoscopyLib {
     
     class BronchoscopyAPI::Impl {
     public:
-        // Core modules
+        // All modules
         std::unique_ptr<CameraController> cameraController;
         std::unique_ptr<ModelManager> modelManager;
         std::unique_ptr<PathVisualization> pathVisualization;
+        std::unique_ptr<RenderingEngine> renderingEngine;
+        std::unique_ptr<NavigationController> navigationController;
+        std::unique_ptr<SceneManager> sceneManager;
         
-        // Renderers and windows (temporary until RenderingEngine is created)
-        vtkSmartPointer<vtkRenderer> overviewRenderer;
-        vtkSmartPointer<vtkRenderer> endoscopeRenderer;
-        vtkRenderWindow* overviewWindow;
-        vtkRenderWindow* endoscopeWindow;
-        
-        // Navigation state
-        PathNode* currentNode;
-        int currentNodeIndex;
-        
-        Impl() : overviewWindow(nullptr), endoscopeWindow(nullptr), 
-                 currentNode(nullptr), currentNodeIndex(-1) {
-            // Create modules
+        Impl() {
+            // Create all modules
             cameraController = std::make_unique<CameraController>();
             modelManager = std::make_unique<ModelManager>();
             pathVisualization = std::make_unique<PathVisualization>();
+            renderingEngine = std::make_unique<RenderingEngine>();
+            navigationController = std::make_unique<NavigationController>();
+            sceneManager = std::make_unique<SceneManager>();
             
-            // Create renderers (temporary until RenderingEngine is created)
-            overviewRenderer = vtkSmartPointer<vtkRenderer>::New();
-            endoscopeRenderer = vtkSmartPointer<vtkRenderer>::New();
-            
-            // Set background colors
-            overviewRenderer->SetBackground(0.1, 0.2, 0.4);
-            endoscopeRenderer->SetBackground(0.15, 0.15, 0.15);
+            // Set up SceneManager with all modules
+            sceneManager->SetCameraController(cameraController.get());
+            sceneManager->SetModelManager(modelManager.get());
+            sceneManager->SetPathVisualization(pathVisualization.get());
+            sceneManager->SetRenderingEngine(renderingEngine.get());
+            sceneManager->SetNavigationController(navigationController.get());
         }
         
         void UpdateViews() {
-            if (currentNode) {
-                // Update endoscope camera
-                cameraController->UpdateEndoscopeCamera(currentNode);
-                
-                // Update position marker
-                pathVisualization->UpdatePositionMarker(currentNode);
-            }
-            
-            // Trigger render if windows exist
-            if (overviewWindow) {
-                overviewWindow->Render();
-            }
-            if (endoscopeWindow) {
-                endoscopeWindow->Render();
-            }
-        }
-        
-        void NavigateToNode(PathNode* node, int index) {
-            currentNode = node;
-            currentNodeIndex = index;
-            UpdateViews();
+            sceneManager->UpdateScene();
         }
     };
     
@@ -79,12 +56,8 @@ namespace BronchoscopyLib {
     BronchoscopyAPI::~BronchoscopyAPI() = default;
     
     void BronchoscopyAPI::Initialize() {
-        // Initialize camera controller
-        pImpl->cameraController->InitializeCameras();
-        pImpl->cameraController->AttachToRenderers(pImpl->overviewRenderer, pImpl->endoscopeRenderer);
-        
-        // Initialize path visualization
-        pImpl->pathVisualization->Initialize();
+        // Initialize scene with all modules
+        pImpl->sceneManager->InitializeScene();
         
         std::cout << "BronchoscopyAPI initialized" << std::endl;
     }
@@ -95,23 +68,15 @@ namespace BronchoscopyLib {
             return false;
         }
         
-        // Load model
-        if (!pImpl->modelManager->LoadModel(polyData)) {
-            return false;
+        // Load model through SceneManager
+        bool success = pImpl->sceneManager->OnModelLoaded(polyData);
+        
+        if (success) {
+            // Render
+            Render();
         }
         
-        // Add to renderers
-        pImpl->modelManager->AddToRenderers(pImpl->overviewRenderer, pImpl->endoscopeRenderer);
-        
-        // Reset cameras to fit model
-        double bounds[6];
-        pImpl->modelManager->GetModelBounds(bounds);
-        pImpl->cameraController->ResetCameras(bounds);
-        
-        // Render
-        Render();
-        
-        return true;
+        return success;
     }
     
     bool BronchoscopyAPI::LoadCameraPath(const std::vector<double>& positions) {
@@ -125,21 +90,13 @@ namespace BronchoscopyLib {
             return false;
         }
         
-        // Add visualization to renderers
-        pImpl->pathVisualization->AddToRenderers(pImpl->overviewRenderer, nullptr);
+        // Notify SceneManager about path loading
+        pImpl->sceneManager->OnPathLoaded();
         
         // Set window reference for immediate updates
-        if (pImpl->overviewWindow) {
-            pImpl->pathVisualization->SetOverviewWindow(pImpl->overviewWindow);
-        }
-        
-        // Navigate to first node
-        CameraPath* path = pImpl->pathVisualization->GetCameraPath();
-        if (path && path->GetTotalNodes() > 0) {
-            path->Reset();
-            pImpl->currentNode = path->GetCurrent();
-            pImpl->currentNodeIndex = 0;
-            pImpl->UpdateViews();
+        if (pImpl->renderingEngine->GetOverviewRenderWindow()) {
+            pImpl->pathVisualization->SetOverviewWindow(
+                pImpl->renderingEngine->GetOverviewRenderWindow());
         }
         
         // Render
@@ -149,123 +106,72 @@ namespace BronchoscopyLib {
     }
     
     void BronchoscopyAPI::MoveToNext() {
-        CameraPath* path = pImpl->pathVisualization->GetCameraPath();
-        if (!path) return;
-        
-        if (path->MoveNext()) {
-            pImpl->currentNodeIndex++;
-            pImpl->currentNode = path->GetCurrent();
-            pImpl->NavigateToNode(pImpl->currentNode, pImpl->currentNodeIndex);
-            std::cout << "Moved to node " << (pImpl->currentNodeIndex + 1) 
-                      << " / " << path->GetTotalNodes() << std::endl;
+        if (pImpl->navigationController->MoveToNext()) {
+            pImpl->UpdateViews();
         }
     }
     
     void BronchoscopyAPI::MoveToPrevious() {
-        CameraPath* path = pImpl->pathVisualization->GetCameraPath();
-        if (!path) return;
-        
-        if (path->MovePrevious()) {
-            pImpl->currentNodeIndex--;
-            pImpl->currentNode = path->GetCurrent();
-            pImpl->NavigateToNode(pImpl->currentNode, pImpl->currentNodeIndex);
-            std::cout << "Moved to node " << (pImpl->currentNodeIndex + 1) 
-                      << " / " << path->GetTotalNodes() << std::endl;
+        if (pImpl->navigationController->MoveToPrevious()) {
+            pImpl->UpdateViews();
         }
     }
     
     void BronchoscopyAPI::MoveToFirst() {
-        CameraPath* path = pImpl->pathVisualization->GetCameraPath();
-        if (!path) return;
-        
-        path->Reset();
-        pImpl->currentNode = path->GetCurrent();
-        pImpl->currentNodeIndex = 0;
+        pImpl->navigationController->MoveToFirst();
         pImpl->UpdateViews();
-        std::cout << "Moved to first node" << std::endl;
     }
     
     void BronchoscopyAPI::MoveToLast() {
-        CameraPath* path = pImpl->pathVisualization->GetCameraPath();
-        if (!path) return;
-        
-        // Move to last by repeatedly calling MoveNext
-        while (path->MoveNext()) {
-            pImpl->currentNodeIndex++;
-        }
-        
-        pImpl->currentNode = path->GetCurrent();
-        pImpl->NavigateToNode(pImpl->currentNode, pImpl->currentNodeIndex);
-        std::cout << "Moved to last node" << std::endl;
+        pImpl->navigationController->MoveToLast();
+        pImpl->UpdateViews();
     }
     
     int BronchoscopyAPI::GetCurrentNodeIndex() const {
-        return pImpl->currentNodeIndex;
+        return pImpl->navigationController->GetCurrentIndex();
     }
     
     int BronchoscopyAPI::GetTotalPathNodes() const {
-        return pImpl->pathVisualization->GetTotalPathNodes();
+        return pImpl->navigationController->GetTotalNodes();
     }
     
     void BronchoscopyAPI::SetOverviewRenderWindow(vtkRenderWindow* window) {
-        pImpl->overviewWindow = window;
+        pImpl->renderingEngine->SetOverviewRenderWindow(window);
+        pImpl->renderingEngine->SetupInteractors();
         
+        // Update PathVisualization window reference
         if (window) {
-            window->AddRenderer(pImpl->overviewRenderer);
-            
-            // Set up interactor
-            vtkRenderWindowInteractor* interactor = window->GetInteractor();
-            if (interactor) {
-                vtkSmartPointer<vtkInteractorStyleTrackballCamera> style = 
-                    vtkSmartPointer<vtkInteractorStyleTrackballCamera>::New();
-                interactor->SetInteractorStyle(style);
-            }
-            
-            // Update PathVisualization window reference
             pImpl->pathVisualization->SetOverviewWindow(window);
         }
     }
     
     void BronchoscopyAPI::SetEndoscopeRenderWindow(vtkRenderWindow* window) {
-        pImpl->endoscopeWindow = window;
-        
-        if (window) {
-            window->AddRenderer(pImpl->endoscopeRenderer);
-            
-            // Set up interactor for endoscope (optional, can be disabled for realism)
-            vtkRenderWindowInteractor* interactor = window->GetInteractor();
-            if (interactor) {
-                vtkSmartPointer<vtkInteractorStyleTrackballCamera> style = 
-                    vtkSmartPointer<vtkInteractorStyleTrackballCamera>::New();
-                interactor->SetInteractorStyle(style);
-            }
-        }
+        pImpl->renderingEngine->SetEndoscopeRenderWindow(window);
+        pImpl->renderingEngine->SetupInteractors();
     }
     
     vtkRenderer* BronchoscopyAPI::GetOverviewRenderer() {
-        return pImpl->overviewRenderer;
+        return pImpl->renderingEngine->GetOverviewRenderer();
     }
     
     vtkRenderer* BronchoscopyAPI::GetEndoscopeRenderer() {
-        return pImpl->endoscopeRenderer;
+        return pImpl->renderingEngine->GetEndoscopeRenderer();
     }
     
     void BronchoscopyAPI::ShowPath(bool show) {
-        pImpl->pathVisualization->ShowPath(show);
-        Render();
+        pImpl->sceneManager->SetShowPath(show);
     }
     
     void BronchoscopyAPI::ShowMarker(bool show) {
-        pImpl->pathVisualization->ShowMarker(show);
-        Render();
+        pImpl->sceneManager->SetShowMarker(show);
     }
     
     bool BronchoscopyAPI::IsPathVisible() const {
-        return pImpl->pathVisualization->IsPathVisible();
+        return pImpl->sceneManager->IsPathVisible();
     }
     
     bool BronchoscopyAPI::IsMarkerVisible() const {
-        return pImpl->pathVisualization->IsMarkerVisible();
+        return pImpl->sceneManager->IsMarkerVisible();
     }
     
     void BronchoscopyAPI::SetPathColor(double r, double g, double b) {
@@ -294,29 +200,105 @@ namespace BronchoscopyLib {
     }
     
     void BronchoscopyAPI::ResetCameras() {
-        if (pImpl->modelManager->HasModel()) {
-            double bounds[6];
-            pImpl->modelManager->GetModelBounds(bounds);
-            pImpl->cameraController->ResetCameras(bounds);
-            Render();
-        }
+        pImpl->sceneManager->ResetCameras();
     }
     
     void BronchoscopyAPI::Render() {
-        if (pImpl->overviewWindow) {
-            pImpl->overviewWindow->Render();
-        }
-        if (pImpl->endoscopeWindow) {
-            pImpl->endoscopeWindow->Render();
-        }
+        pImpl->renderingEngine->Render();
     }
     
     bool BronchoscopyAPI::HasModel() const {
-        return pImpl->modelManager->HasModel();
+        return pImpl->sceneManager->HasModel();
     }
     
     bool BronchoscopyAPI::HasPath() const {
-        return pImpl->pathVisualization->GetCameraPath() != nullptr;
+        return pImpl->sceneManager->HasPath();
+    }
+    
+    // 新增：自动播放控制
+    void BronchoscopyAPI::StartAutoPlay(int intervalMs) {
+        pImpl->navigationController->StartAutoPlay(intervalMs);
+    }
+    
+    void BronchoscopyAPI::StopAutoPlay() {
+        pImpl->navigationController->StopAutoPlay();
+    }
+    
+    void BronchoscopyAPI::PauseAutoPlay() {
+        pImpl->navigationController->PauseAutoPlay();
+    }
+    
+    void BronchoscopyAPI::ResumeAutoPlay() {
+        pImpl->navigationController->ResumeAutoPlay();
+    }
+    
+    bool BronchoscopyAPI::IsPlaying() const {
+        return pImpl->navigationController->IsPlaying();
+    }
+    
+    void BronchoscopyAPI::SetPlaySpeed(double speed) {
+        pImpl->navigationController->SetPlaySpeed(speed);
+    }
+    
+    double BronchoscopyAPI::GetPlaySpeed() const {
+        return pImpl->navigationController->GetPlaySpeed();
+    }
+    
+    void BronchoscopyAPI::SetLoopMode(bool loop) {
+        pImpl->navigationController->SetLoopMode(loop);
+    }
+    
+    bool BronchoscopyAPI::GetLoopMode() const {
+        return pImpl->navigationController->GetLoopMode();
+    }
+    
+    // 新增：进度控制
+    bool BronchoscopyAPI::MoveToPosition(int index) {
+        bool result = pImpl->navigationController->MoveToPosition(index);
+        if (result) {
+            pImpl->UpdateViews();
+        }
+        return result;
+    }
+    
+    double BronchoscopyAPI::GetProgressPercentage() const {
+        return pImpl->navigationController->GetProgressPercentage();
+    }
+    
+    bool BronchoscopyAPI::IsAtStart() const {
+        return pImpl->navigationController->IsAtStart();
+    }
+    
+    bool BronchoscopyAPI::IsAtEnd() const {
+        return pImpl->navigationController->IsAtEnd();
+    }
+    
+    // 新增：场景管理
+    void BronchoscopyAPI::ClearScene() {
+        pImpl->sceneManager->ClearScene();
+    }
+    
+    void BronchoscopyAPI::ClearModel() {
+        pImpl->sceneManager->ClearModel();
+    }
+    
+    void BronchoscopyAPI::ClearPath() {
+        pImpl->sceneManager->ClearPath();
+    }
+    
+    void BronchoscopyAPI::PrintSceneInfo() const {
+        pImpl->sceneManager->PrintSceneInfo();
+    }
+    
+    // 新增：渲染控制
+    void BronchoscopyAPI::SetOverviewBackground(double r, double g, double b) {
+        pImpl->renderingEngine->SetOverviewBackground(r, g, b);
+        Render();
+    }
+    
+    void BronchoscopyAPI::SetEndoscopeBackground(double r, double g, double b) {
+        pImpl->renderingEngine->SetEndoscopeBackground(r, g, b);
+        Render();
     }
     
 } // namespace BronchoscopyLib

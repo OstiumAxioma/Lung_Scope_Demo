@@ -91,6 +91,9 @@ set(SOURCES
     src/CameraController.cpp
     src/ModelManager.cpp
     src/PathVisualization.cpp
+    src/RenderingEngine.cpp
+    src/NavigationController.cpp
+    src/SceneManager.cpp
     src/BronchoscopyAPI.cpp
 )
 
@@ -100,6 +103,9 @@ set(HEADERS
     header/CameraController.h
     header/ModelManager.h
     header/PathVisualization.h
+    header/RenderingEngine.h
+    header/NavigationController.h
+    header/SceneManager.h
     header/BronchoscopyAPI.h
 )
 

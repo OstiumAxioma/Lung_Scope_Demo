@@ -68,6 +68,33 @@ namespace BronchoscopyLib {
         bool HasModel() const;
         bool HasPath() const;
         
+        // 新增：自动播放控制（来自NavigationController）
+        void StartAutoPlay(int intervalMs = 100);
+        void StopAutoPlay();
+        void PauseAutoPlay();
+        void ResumeAutoPlay();
+        bool IsPlaying() const;
+        void SetPlaySpeed(double speed);
+        double GetPlaySpeed() const;
+        void SetLoopMode(bool loop);
+        bool GetLoopMode() const;
+        
+        // 新增：进度控制（来自NavigationController）
+        bool MoveToPosition(int index);
+        double GetProgressPercentage() const;
+        bool IsAtStart() const;
+        bool IsAtEnd() const;
+        
+        // 新增：场景管理（来自SceneManager）
+        void ClearScene();
+        void ClearModel();
+        void ClearPath();
+        void PrintSceneInfo() const;
+        
+        // 新增：渲染控制（来自RenderingEngine）
+        void SetOverviewBackground(double r, double g, double b);
+        void SetEndoscopeBackground(double r, double g, double b);
+        
     private:
         class Impl;
         std::unique_ptr<Impl> pImpl;
