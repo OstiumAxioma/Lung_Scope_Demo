@@ -94,6 +94,7 @@ set(SOURCES
     src/RenderingEngine.cpp
     src/NavigationController.cpp
     src/SceneManager.cpp
+    src/ShaderSystem.cpp
     src/BronchoscopyAPI.cpp
 )
 
@@ -106,6 +107,7 @@ set(HEADERS
     header/RenderingEngine.h
     header/NavigationController.h
     header/SceneManager.h
+    header/ShaderSystem.h
     header/BronchoscopyAPI.h
 )
 

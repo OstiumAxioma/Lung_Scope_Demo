@@ -1,9 +1,11 @@
 #include "ModelManager.h"
+#include "ShaderSystem.h"
 
 // VTK头文件
 #include <vtkSmartPointer.h>
 #include <vtkPolyData.h>
 #include <vtkPolyDataMapper.h>
+#include <vtkOpenGLPolyDataMapper.h>
 #include <vtkActor.h>
 #include <vtkProperty.h>
 #include <vtkRenderer.h>
@@ -44,12 +46,12 @@ namespace BronchoscopyLib {
         void CreateMappers() {
             if (!airwayModel) return;
             
-            // 为每个渲染器创建独立的mapper（避免共享mapper导致的渲染冲突）
-            overviewMapper = vtkSmartPointer<vtkPolyDataMapper>::New();
+            // 使用OpenGLPolyDataMapper以支持自定义shader
+            overviewMapper = vtkSmartPointer<vtkOpenGLPolyDataMapper>::New();
             overviewMapper->SetInputData(airwayModel);
             overviewMapper->ScalarVisibilityOff();
             
-            endoscopeMapper = vtkSmartPointer<vtkPolyDataMapper>::New();
+            endoscopeMapper = vtkSmartPointer<vtkOpenGLPolyDataMapper>::New();
             endoscopeMapper->SetInputData(airwayModel);
             endoscopeMapper->ScalarVisibilityOff();
         }
@@ -131,6 +133,14 @@ namespace BronchoscopyLib {
     }
     
     void ModelManager::AddToRenderers(vtkRenderer* overviewRenderer, vtkRenderer* endoscopeRenderer) {
+        // 初始化ShaderSystem
+        static ShaderSystem shaderSystem;
+        static bool shaderInitialized = false;
+        if (!shaderInitialized) {
+            shaderSystem.Initialize();
+            shaderInitialized = true;
+        }
+        
         // 创建Actor如果还不存在
         if (!pImpl->overviewActor && pImpl->airwayModel) {
             CreateOverviewActor();
@@ -139,15 +149,27 @@ namespace BronchoscopyLib {
             CreateEndoscopeActor();
         }
         
-        // 添加到渲染器
+        // 添加到渲染器并应用shader
         if (overviewRenderer && pImpl->overviewActor) {
+            // 应用overview shader
+            ShaderSystem::ShaderConfig config(ShaderSystem::SURFACE, 
+                                             ShaderSystem::EFFECT_NONE, 
+                                             ShaderSystem::VIEW_OVERVIEW);
+            shaderSystem.ApplyShader(pImpl->overviewActor, config);
+            
             overviewRenderer->AddActor(pImpl->overviewActor);
-            std::cout << "Overview actor added to renderer" << std::endl;
+            std::cout << "Overview actor added to renderer with shader" << std::endl;
         }
         
         if (endoscopeRenderer && pImpl->endoscopeActor) {
+            // 应用endoscope shader
+            ShaderSystem::ShaderConfig config(ShaderSystem::SURFACE, 
+                                             ShaderSystem::EFFECT_NONE, 
+                                             ShaderSystem::VIEW_ENDOSCOPE);
+            shaderSystem.ApplyShader(pImpl->endoscopeActor, config);
+            
             endoscopeRenderer->AddActor(pImpl->endoscopeActor);
-            std::cout << "Endoscope actor added to renderer" << std::endl;
+            std::cout << "Endoscope actor added to renderer with shader" << std::endl;
         }
     }
     
