@@ -46,6 +46,12 @@ namespace BronchoscopyLib {
             POST_FXAA        // FXAA抗锯齿
         };
         
+        // 材质shader
+        enum MaterialShader {
+            MATERIAL_NONE,
+            MATERIAL_TISSUE   // 组织材质（平滑光照、次表面散射）
+        };
+        
         // Shader配置
         struct ShaderConfig {
             BaseShader base;
@@ -70,6 +76,11 @@ namespace BronchoscopyLib {
         // 应用shader到mapper（更底层的接口）
         bool ApplyShaderToMapper(vtkOpenGLPolyDataMapper* mapper, 
                                  const ShaderConfig& config);
+        
+        // 应用材质shader
+        bool ApplyMaterialShader(vtkActor* actor, MaterialShader material);
+        bool ApplyMaterialShaderToMapper(vtkOpenGLPolyDataMapper* mapper, 
+                                         MaterialShader material);
         
         // 应用后处理到渲染器
         bool ApplyPostProcessing(vtkRenderer* renderer, PostShader postEffect);

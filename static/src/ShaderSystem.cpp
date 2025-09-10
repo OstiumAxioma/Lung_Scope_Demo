@@ -145,12 +145,26 @@ namespace BronchoscopyLib {
         }
         
         
-        // 获取视图shader路径
-        std::string GetViewShaderPath(ViewShader view) {
+        // 获取视图shader路径（分别返回顶点和片段）
+        std::pair<std::string, std::string> GetViewShaderPaths(ViewShader view) {
             switch (view) {
-                case VIEW_ENDOSCOPE: return "view/endoscope.shader";
-                case VIEW_OVERVIEW: return "view/overview.shader";
-                default: return "";
+                case VIEW_ENDOSCOPE: 
+                    return std::make_pair("view/endoscope.vert", "view/endoscope.frag");
+                case VIEW_OVERVIEW: 
+                    return std::make_pair("view/overview.vert", "view/overview.frag");
+                default: 
+                    return std::make_pair("", "");
+            }
+        }
+        
+        // 获取材质shader路径
+        std::pair<std::string, std::string> GetMaterialShaderPaths(MaterialShader material) {
+            switch (material) {
+                case MATERIAL_TISSUE:
+                    return std::make_pair("material/tissue.vert", "material/tissue.frag");
+                case MATERIAL_NONE:
+                default:
+                    return std::make_pair("", "");
             }
         }
         
@@ -168,44 +182,34 @@ namespace BronchoscopyLib {
             
             std::string line;
             while (std::getline(file, line)) {
-                // 跳过注释和空行
+                // 跳过空行和#注释
                 if (line.empty() || line[0] == '#') continue;
                 
-                // 查找替换指令 [Type] Tag BEFORE/AFTER
-                if (line[0] == '[') {
+                // 检查是否为VTK替换标签
+                if (line.find("//VTK::") == 0) {
                     ShaderReplacement replacement;
                     
-                    // 解析shader类型
-                    size_t typeEnd = line.find(']');
-                    if (typeEnd == std::string::npos) continue;
-                    
-                    std::string typeStr = line.substr(1, typeEnd - 1);
-                    if (typeStr == "Vertex") {
-                        replacement.shaderType = vtkShader::Vertex;
-                    } else if (typeStr == "Fragment") {
-                        replacement.shaderType = vtkShader::Fragment;
-                    } else {
-                        continue;
+                    // 查找空格分隔标签和BEFORE/AFTER
+                    size_t spacePos = line.find(' ');
+                    if (spacePos != std::string::npos) {
+                        replacement.tag = line.substr(0, spacePos);
+                        std::string timing = line.substr(spacePos + 1);
+                        replacement.before = (timing == "BEFORE");
+                        
+                        // 读取下一行（应该是相同的标签作为替换点）
+                        if (std::getline(file, line)) {
+                            // 继续读取shader代码直到END_REPLACEMENT
+                            std::string code = line + "\n";  // 包含标签行本身
+                            while (std::getline(file, line)) {
+                                if (line == "END_REPLACEMENT") break;
+                                code += line + "\n";
+                            }
+                            replacement.code = code;
+                            replacements.push_back(replacement);
+                        }
                     }
-                    
-                    // 解析tag和before/after
-                    size_t tagStart = line.find(' ', typeEnd) + 1;
-                    size_t tagEnd = line.find(' ', tagStart);
-                    replacement.tag = line.substr(tagStart, tagEnd - tagStart);
-                    
-                    std::string timing = line.substr(tagEnd + 1);
-                    replacement.before = (timing == "BEFORE");
-                    
-                    // 读取shader代码直到END_REPLACEMENT
-                    std::string code;
-                    while (std::getline(file, line)) {
-                        if (line == "END_REPLACEMENT") break;
-                        code += line + "\n";
-                    }
-                    replacement.code = code;
-                    
-                    replacements.push_back(replacement);
                 }
+                // 其他//开头的行视为普通注释，忽略
             }
             
             return replacements;
@@ -266,42 +270,177 @@ namespace BronchoscopyLib {
         // 清除之前的shader替换
         mapper->ClearAllShaderReplacements();
         
-        // 获取shader文件路径
-        std::string shaderPath = pImpl->GetViewShaderPath(config.view);
-        if (shaderPath.empty() && config.view != VIEW_NONE) {
-            std::cerr << "ShaderSystem: No shader file for view type " << config.view << std::endl;
+        // 获取shader文件路径（顶点和片段分开）
+        auto shaderPaths = pImpl->GetViewShaderPaths(config.view);
+        if (shaderPaths.first.empty() && config.view != VIEW_NONE) {
+            std::cerr << "ShaderSystem: No shader files for view type " << config.view << std::endl;
             return false;
         }
         
-        // 检查缓存
-        std::vector<ShaderReplacement> replacements;
-        auto cacheIt = pImpl->replacementCache.find(shaderPath);
-        if (cacheIt != pImpl->replacementCache.end()) {
-            replacements = cacheIt->second;
-        } else {
-            // 解析shader文件
-            replacements = pImpl->ParseShaderFile(shaderPath);
-            if (!replacements.empty()) {
-                pImpl->replacementCache[shaderPath] = replacements;
-                std::cout << "ShaderSystem: Loaded " << replacements.size() 
-                         << " shader replacements from " << shaderPath << std::endl;
+        int totalReplacements = 0;
+        
+        // 加载顶点shader替换
+        if (!shaderPaths.first.empty()) {
+            std::vector<ShaderReplacement> vertReplacements;
+            auto cacheIt = pImpl->replacementCache.find(shaderPaths.first);
+            if (cacheIt != pImpl->replacementCache.end()) {
+                vertReplacements = cacheIt->second;
+            } else {
+                vertReplacements = pImpl->ParseShaderFile(shaderPaths.first);
+                if (!vertReplacements.empty()) {
+                    pImpl->replacementCache[shaderPaths.first] = vertReplacements;
+                }
+            }
+            
+            // 应用顶点shader替换
+            for (auto& replacement : vertReplacements) {
+                replacement.shaderType = vtkShader::Vertex;  // 设置为顶点shader
+                mapper->AddShaderReplacement(
+                    replacement.shaderType,
+                    replacement.tag.c_str(),
+                    replacement.before,
+                    replacement.code.c_str(),
+                    false
+                );
+                totalReplacements++;
             }
         }
         
-        // 应用所有替换
-        for (const auto& replacement : replacements) {
-            mapper->AddShaderReplacement(
-                replacement.shaderType,
-                replacement.tag.c_str(),
-                replacement.before,
-                replacement.code.c_str(),
-                false  // 只做一次
-            );
+        // 加载片段shader替换
+        if (!shaderPaths.second.empty()) {
+            std::vector<ShaderReplacement> fragReplacements;
+            auto cacheIt = pImpl->replacementCache.find(shaderPaths.second);
+            if (cacheIt != pImpl->replacementCache.end()) {
+                fragReplacements = cacheIt->second;
+            } else {
+                fragReplacements = pImpl->ParseShaderFile(shaderPaths.second);
+                if (!fragReplacements.empty()) {
+                    pImpl->replacementCache[shaderPaths.second] = fragReplacements;
+                }
+            }
+            
+            // 应用片段shader替换
+            for (auto& replacement : fragReplacements) {
+                replacement.shaderType = vtkShader::Fragment;  // 设置为片段shader
+                mapper->AddShaderReplacement(
+                    replacement.shaderType,
+                    replacement.tag.c_str(),
+                    replacement.before,
+                    replacement.code.c_str(),
+                    false
+                );
+                totalReplacements++;
+            }
         }
         
-        if (!replacements.empty()) {
-            std::cout << "ShaderSystem: Applied " << replacements.size() 
+        if (totalReplacements > 0) {
+            std::cout << "ShaderSystem: Applied " << totalReplacements 
                      << " shader replacements for view type " << config.view << std::endl;
+        }
+        
+        return true;
+    }
+    
+    bool ShaderSystem::ApplyMaterialShader(vtkActor* actor, MaterialShader material) {
+        if (!actor) {
+            std::cerr << "ShaderSystem: Invalid actor" << std::endl;
+            return false;
+        }
+        
+        vtkMapper* mapper = actor->GetMapper();
+        if (!mapper) {
+            std::cerr << "ShaderSystem: Actor has no mapper" << std::endl;
+            return false;
+        }
+        
+        vtkOpenGLPolyDataMapper* glMapper = 
+            vtkOpenGLPolyDataMapper::SafeDownCast(mapper);
+        
+        if (!glMapper) {
+            std::cerr << "ShaderSystem: Mapper is not OpenGL poly data mapper" << std::endl;
+            return false;
+        }
+        
+        return ApplyMaterialShaderToMapper(glMapper, material);
+    }
+    
+    bool ShaderSystem::ApplyMaterialShaderToMapper(vtkOpenGLPolyDataMapper* mapper, 
+                                                   MaterialShader material) {
+        if (!mapper) {
+            return false;
+        }
+        
+        if (!pImpl->initialized) {
+            Initialize();
+        }
+        
+        // 不清除之前的替换，因为材质和视图shader是叠加的
+        // mapper->ClearAllShaderReplacements();
+        
+        // 获取材质shader文件路径
+        auto shaderPaths = pImpl->GetMaterialShaderPaths(material);
+        if (shaderPaths.first.empty() && material != MATERIAL_NONE) {
+            std::cerr << "ShaderSystem: No shader files for material type " << material << std::endl;
+            return false;
+        }
+        
+        int totalReplacements = 0;
+        
+        // 加载顶点shader替换
+        if (!shaderPaths.first.empty()) {
+            std::vector<ShaderReplacement> vertReplacements;
+            auto cacheIt = pImpl->replacementCache.find(shaderPaths.first);
+            if (cacheIt != pImpl->replacementCache.end()) {
+                vertReplacements = cacheIt->second;
+            } else {
+                vertReplacements = pImpl->ParseShaderFile(shaderPaths.first);
+                if (!vertReplacements.empty()) {
+                    pImpl->replacementCache[shaderPaths.first] = vertReplacements;
+                }
+            }
+            
+            for (auto& replacement : vertReplacements) {
+                replacement.shaderType = vtkShader::Vertex;
+                mapper->AddShaderReplacement(
+                    replacement.shaderType,
+                    replacement.tag.c_str(),
+                    replacement.before,
+                    replacement.code.c_str(),
+                    false
+                );
+                totalReplacements++;
+            }
+        }
+        
+        // 加载片段shader替换
+        if (!shaderPaths.second.empty()) {
+            std::vector<ShaderReplacement> fragReplacements;
+            auto cacheIt = pImpl->replacementCache.find(shaderPaths.second);
+            if (cacheIt != pImpl->replacementCache.end()) {
+                fragReplacements = cacheIt->second;
+            } else {
+                fragReplacements = pImpl->ParseShaderFile(shaderPaths.second);
+                if (!fragReplacements.empty()) {
+                    pImpl->replacementCache[shaderPaths.second] = fragReplacements;
+                }
+            }
+            
+            for (auto& replacement : fragReplacements) {
+                replacement.shaderType = vtkShader::Fragment;
+                mapper->AddShaderReplacement(
+                    replacement.shaderType,
+                    replacement.tag.c_str(),
+                    replacement.before,
+                    replacement.code.c_str(),
+                    false
+                );
+                totalReplacements++;
+            }
+        }
+        
+        if (totalReplacements > 0) {
+            std::cout << "ShaderSystem: Applied " << totalReplacements 
+                     << " material shader replacements" << std::endl;
         }
         
         return true;

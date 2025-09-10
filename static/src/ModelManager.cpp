@@ -182,25 +182,31 @@ namespace BronchoscopyLib {
         if (overviewRenderer && pImpl->overviewActor) {
             overviewRenderer->AddActor(pImpl->overviewActor);
             
-            // 在添加到渲染器后应用shader
+            // 先应用视图shader
             ShaderSystem::ShaderConfig config(ShaderSystem::SURFACE, 
                                              ShaderSystem::EFFECT_NONE, 
                                              ShaderSystem::VIEW_OVERVIEW);
             shaderSystem.ApplyShader(pImpl->overviewActor, config);
             
-            std::cout << "Overview actor added to renderer with shader" << std::endl;
+            // 再应用材质shader（不会清除之前的替换）
+            shaderSystem.ApplyMaterialShader(pImpl->overviewActor, ShaderSystem::MATERIAL_TISSUE);
+            
+            std::cout << "Overview actor added with tissue material and view shader" << std::endl;
         }
         
         if (endoscopeRenderer && pImpl->endoscopeActor) {
             endoscopeRenderer->AddActor(pImpl->endoscopeActor);
             
-            // 在添加到渲染器后应用shader
+            // 先应用视图shader
             ShaderSystem::ShaderConfig config(ShaderSystem::SURFACE, 
                                              ShaderSystem::EFFECT_NONE, 
                                              ShaderSystem::VIEW_ENDOSCOPE);
             shaderSystem.ApplyShader(pImpl->endoscopeActor, config);
             
-            std::cout << "Endoscope actor added to renderer with shader" << std::endl;
+            // 再应用材质shader（不会清除之前的替换）
+            shaderSystem.ApplyMaterialShader(pImpl->endoscopeActor, ShaderSystem::MATERIAL_TISSUE);
+            
+            std::cout << "Endoscope actor added with tissue material and view shader" << std::endl;
         }
     }
     
