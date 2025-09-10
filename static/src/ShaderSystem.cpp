@@ -13,6 +13,7 @@
 #include <fstream>
 #include <sstream>
 #include <map>
+#include <vector>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -24,6 +25,14 @@
 
 namespace BronchoscopyLib {
     
+    // Shader替换结构
+    struct ShaderReplacement {
+        vtkShader::Type shaderType;
+        std::string tag;
+        bool before;
+        std::string code;
+    };
+    
     class ShaderSystem::Impl {
     public:
         // Shader路径
@@ -31,6 +40,9 @@ namespace BronchoscopyLib {
         
         // 缓存的shader源码
         std::map<std::string, std::string> shaderCache;
+        
+        // 缓存的shader替换
+        std::map<std::string, std::vector<ShaderReplacement>> replacementCache;
         
         // 是否已初始化
         bool initialized;
@@ -132,63 +144,71 @@ namespace BronchoscopyLib {
             }
         }
         
-        // 获取基础shader路径
-        std::string GetBaseShaderPath(BaseShader base, bool isVertex) {
-            std::string name;
-            switch (base) {
-                case SURFACE: name = "surface"; break;
-                case LINE: name = "line"; break;
-                case POINT: name = "point"; break;
-            }
-            return "basic/" + name + (isVertex ? ".vert" : ".frag");
-        }
-        
-        // 获取效果shader路径
-        std::string GetEffectShaderPath(EffectShader effect) {
-            switch (effect) {
-                case PHONG: return "effect/phong.frag";
-                case FRESNEL: return "effect/fresnel.frag";
-                case FOG: return "effect/fog.frag";
-                default: return "";
-            }
-        }
         
         // 获取视图shader路径
-        std::string GetViewShaderPath(ViewShader view, bool isVertex) {
-            std::string name;
+        std::string GetViewShaderPath(ViewShader view) {
             switch (view) {
-                case VIEW_ENDOSCOPE: name = "endoscope"; break;
-                case VIEW_OVERVIEW: name = "overview"; break;
+                case VIEW_ENDOSCOPE: return "view/endoscope.shader";
+                case VIEW_OVERVIEW: return "view/overview.shader";
                 default: return "";
             }
-            return "view/" + name + (isVertex ? ".vert" : ".frag");
         }
         
-        // 组合shader
-        std::string CombineShaders(const ShaderConfig& config, bool isVertex) {
-            std::string shader;
+        // 解析shader替换文件
+        std::vector<ShaderReplacement> ParseShaderFile(const std::string& filepath) {
+            std::vector<ShaderReplacement> replacements;
             
-            if (isVertex) {
-                // 顶点着色器：基础 + 视图特定（如果有）
-                shader = LoadShaderFile(GetBaseShaderPath(config.base, true));
-                
-                if (config.view != VIEW_NONE) {
-                    std::string viewShader = GetViewShaderPath(config.view, true);
-                    if (!viewShader.empty()) {
-                        // 这里可以添加shader组合逻辑
-                        // 目前简单返回视图特定的shader
-                        shader = LoadShaderFile(viewShader);
-                    }
-                }
-            } else {
-                // 片段着色器：基础 + 效果 + 视图特定
-                shader = LoadShaderFile(GetBaseShaderPath(config.base, false));
-                
-                // TODO: 实现shader组合逻辑
-                // 目前简单返回基础shader
+            std::string fullPath = shaderRootPath + filepath;
+            std::ifstream file(fullPath);
+            
+            if (!file.is_open()) {
+                std::cerr << "ShaderSystem: Failed to open shader file: " << fullPath << std::endl;
+                return replacements;
             }
             
-            return shader;
+            std::string line;
+            while (std::getline(file, line)) {
+                // 跳过注释和空行
+                if (line.empty() || line[0] == '#') continue;
+                
+                // 查找替换指令 [Type] Tag BEFORE/AFTER
+                if (line[0] == '[') {
+                    ShaderReplacement replacement;
+                    
+                    // 解析shader类型
+                    size_t typeEnd = line.find(']');
+                    if (typeEnd == std::string::npos) continue;
+                    
+                    std::string typeStr = line.substr(1, typeEnd - 1);
+                    if (typeStr == "Vertex") {
+                        replacement.shaderType = vtkShader::Vertex;
+                    } else if (typeStr == "Fragment") {
+                        replacement.shaderType = vtkShader::Fragment;
+                    } else {
+                        continue;
+                    }
+                    
+                    // 解析tag和before/after
+                    size_t tagStart = line.find(' ', typeEnd) + 1;
+                    size_t tagEnd = line.find(' ', tagStart);
+                    replacement.tag = line.substr(tagStart, tagEnd - tagStart);
+                    
+                    std::string timing = line.substr(tagEnd + 1);
+                    replacement.before = (timing == "BEFORE");
+                    
+                    // 读取shader代码直到END_REPLACEMENT
+                    std::string code;
+                    while (std::getline(file, line)) {
+                        if (line == "END_REPLACEMENT") break;
+                        code += line + "\n";
+                    }
+                    replacement.code = code;
+                    
+                    replacements.push_back(replacement);
+                }
+            }
+            
+            return replacements;
         }
     };
     
@@ -246,62 +266,43 @@ namespace BronchoscopyLib {
         // 清除之前的shader替换
         mapper->ClearAllShaderReplacements();
         
-        // 根据视图类型应用不同的shader效果
-        if (config.view == VIEW_OVERVIEW) {
-            // Overview视图 - 增强边缘光照
-            mapper->AddShaderReplacement(
-                vtkShader::Fragment,
-                "//VTK::Light::Impl",  // 替换光照实现
-                false,  // 在标准替换之后
-                "//VTK::Light::Impl\n"  // 保留默认光照
-                "  // 增强边缘光照\n"
-                "  vec3 viewDir = normalize(-vertexVC.xyz);\n"
-                "  float rim = 1.0 - max(dot(viewDir, normalVCVSOutput), 0.0);\n"
-                "  rim = smoothstep(0.6, 1.0, rim);\n"
-                "  vec3 rimLight = vec3(0.2, 0.2, 0.25) * rim;\n"
-                "  fragOutput0.rgb += rimLight;\n",
-                false  // 只做一次
-            );
-            
-            // 调整基础颜色
-            mapper->AddShaderReplacement(
-                vtkShader::Fragment,
-                "//VTK::Color::Impl",
-                false,
-                "//VTK::Color::Impl\n"
-                "  // 微调颜色\n"
-                "  diffuseColor = vec3(0.85, 0.85, 0.8);\n"
-                "  ambientColor = vec3(0.3, 0.3, 0.3);\n",
-                false
-            );
+        // 获取shader文件路径
+        std::string shaderPath = pImpl->GetViewShaderPath(config.view);
+        if (shaderPath.empty() && config.view != VIEW_NONE) {
+            std::cerr << "ShaderSystem: No shader file for view type " << config.view << std::endl;
+            return false;
         }
-        else if (config.view == VIEW_ENDOSCOPE) {
-            // Endoscope视图 - 内窥镜效果，微红色调
+        
+        // 检查缓存
+        std::vector<ShaderReplacement> replacements;
+        auto cacheIt = pImpl->replacementCache.find(shaderPath);
+        if (cacheIt != pImpl->replacementCache.end()) {
+            replacements = cacheIt->second;
+        } else {
+            // 解析shader文件
+            replacements = pImpl->ParseShaderFile(shaderPath);
+            if (!replacements.empty()) {
+                pImpl->replacementCache[shaderPath] = replacements;
+                std::cout << "ShaderSystem: Loaded " << replacements.size() 
+                         << " shader replacements from " << shaderPath << std::endl;
+            }
+        }
+        
+        // 应用所有替换
+        for (const auto& replacement : replacements) {
             mapper->AddShaderReplacement(
-                vtkShader::Fragment,
-                "//VTK::Color::Impl",
-                false,
-                "//VTK::Color::Impl\n"
-                "  // 内窥镜视图颜色调整\n"
-                "  diffuseColor = vec3(0.95, 0.75, 0.7);\n"
-                "  ambientColor = vec3(0.35, 0.25, 0.25);\n",
-                false
-            );
-            
-            // 调整镜面反射模拟湿润表面
-            mapper->AddShaderReplacement(
-                vtkShader::Fragment,
-                "//VTK::Light::Impl",
-                false,
-                "//VTK::Light::Impl\n"
-                "  // 增强镜面反射\n"
-                "  specular *= 1.5;\n",
-                false
+                replacement.shaderType,
+                replacement.tag.c_str(),
+                replacement.before,
+                replacement.code.c_str(),
+                false  // 只做一次
             );
         }
         
-        std::cout << "ShaderSystem: Applied shader replacements for view type " 
-                 << config.view << std::endl;
+        if (!replacements.empty()) {
+            std::cout << "ShaderSystem: Applied " << replacements.size() 
+                     << " shader replacements for view type " << config.view << std::endl;
+        }
         
         return true;
     }
