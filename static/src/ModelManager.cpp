@@ -9,6 +9,7 @@
 #include <vtkActor.h>
 #include <vtkProperty.h>
 #include <vtkRenderer.h>
+#include <vtkPolyDataNormals.h>
 
 #include <iostream>
 
@@ -18,6 +19,7 @@ namespace BronchoscopyLib {
     public:
         // 模型数据
         vtkSmartPointer<vtkPolyData> airwayModel;
+        vtkSmartPointer<vtkPolyData> smoothedModel;  // 平滑法线后的模型
         
         // 独立的mapper（每个Actor独立的mapper避免渲染冲突）
         vtkSmartPointer<vtkPolyDataMapper> overviewMapper;
@@ -31,8 +33,9 @@ namespace BronchoscopyLib {
         double overviewColor[3];
         double endoscopeColor[3];
         double overviewOpacity;
+        double smoothingAngle;  // 平滑角度
         
-        Impl() : overviewOpacity(0.7) {
+        Impl() : overviewOpacity(0.7), smoothingAngle(80.0) {
             // 默认颜色
             overviewColor[0] = 0.8;
             overviewColor[1] = 0.8;
@@ -46,14 +49,40 @@ namespace BronchoscopyLib {
         void CreateMappers() {
             if (!airwayModel) return;
             
+            // 生成平滑法线
+            vtkSmartPointer<vtkPolyDataNormals> normalGenerator = 
+                vtkSmartPointer<vtkPolyDataNormals>::New();
+            normalGenerator->SetInputData(airwayModel);
+            normalGenerator->ComputePointNormalsOn();
+            normalGenerator->ComputeCellNormalsOff();
+            
+            // 设置特征角度 - 控制哪些边缘保持锐利
+            // 180度 = 完全平滑，30-60度 = 保留明显的边缘
+            normalGenerator->SetFeatureAngle(smoothingAngle);
+            
+            // 分割锐利边缘
+            normalGenerator->SplittingOn();
+            
+            // 确保法线一致性
+            normalGenerator->ConsistencyOn();
+            
+            // 自动确定法线方向
+            normalGenerator->AutoOrientNormalsOn();
+            
+            normalGenerator->Update();
+            smoothedModel = normalGenerator->GetOutput();
+            
             // 使用OpenGLPolyDataMapper以支持自定义shader
             overviewMapper = vtkSmartPointer<vtkOpenGLPolyDataMapper>::New();
-            overviewMapper->SetInputData(airwayModel);
+            overviewMapper->SetInputData(smoothedModel);
             overviewMapper->ScalarVisibilityOff();
             
             endoscopeMapper = vtkSmartPointer<vtkOpenGLPolyDataMapper>::New();
-            endoscopeMapper->SetInputData(airwayModel);
+            endoscopeMapper->SetInputData(smoothedModel);
             endoscopeMapper->ScalarVisibilityOff();
+            
+            std::cout << "ModelManager: Applied smooth shading with feature angle " 
+                     << smoothingAngle << " degrees" << std::endl;
         }
     };
     
@@ -209,6 +238,29 @@ namespace BronchoscopyLib {
         
         if (pImpl->endoscopeActor) {
             pImpl->endoscopeActor->GetProperty()->SetColor(r, g, b);
+        }
+    }
+    
+    void ModelManager::SetSmoothingAngle(double angle) {
+        // 限制角度范围在0-180度
+        if (angle < 0.0) angle = 0.0;
+        if (angle > 180.0) angle = 180.0;
+        
+        pImpl->smoothingAngle = angle;
+        
+        // 如果模型已加载，重新创建mapper以应用新的平滑度
+        if (pImpl->airwayModel) {
+            pImpl->CreateMappers();
+            
+            // 更新Actor的mapper
+            if (pImpl->overviewActor && pImpl->overviewMapper) {
+                pImpl->overviewActor->SetMapper(pImpl->overviewMapper);
+            }
+            if (pImpl->endoscopeActor && pImpl->endoscopeMapper) {
+                pImpl->endoscopeActor->SetMapper(pImpl->endoscopeMapper);
+            }
+            
+            std::cout << "ModelManager: Updated smoothing angle to " << angle << " degrees" << std::endl;
         }
     }
     

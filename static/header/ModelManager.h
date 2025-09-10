@@ -44,6 +44,10 @@ namespace BronchoscopyLib {
         void SetOverviewColor(double r, double g, double b);
         void SetEndoscopeColor(double r, double g, double b);
         
+        // 设置平滑度（特征角度，0-180度）
+        // 180度 = 完全平滑，0度 = 保留所有边缘
+        void SetSmoothingAngle(double angle);
+        
         // 获取模型边界
         void GetModelBounds(double bounds[6]) const;
         
