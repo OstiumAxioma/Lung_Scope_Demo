@@ -151,24 +151,26 @@ namespace BronchoscopyLib {
         
         // 添加到渲染器并应用shader
         if (overviewRenderer && pImpl->overviewActor) {
-            // 应用overview shader
+            overviewRenderer->AddActor(pImpl->overviewActor);
+            
+            // 在添加到渲染器后应用shader
             ShaderSystem::ShaderConfig config(ShaderSystem::SURFACE, 
                                              ShaderSystem::EFFECT_NONE, 
                                              ShaderSystem::VIEW_OVERVIEW);
             shaderSystem.ApplyShader(pImpl->overviewActor, config);
             
-            overviewRenderer->AddActor(pImpl->overviewActor);
             std::cout << "Overview actor added to renderer with shader" << std::endl;
         }
         
         if (endoscopeRenderer && pImpl->endoscopeActor) {
-            // 应用endoscope shader
+            endoscopeRenderer->AddActor(pImpl->endoscopeActor);
+            
+            // 在添加到渲染器后应用shader
             ShaderSystem::ShaderConfig config(ShaderSystem::SURFACE, 
                                              ShaderSystem::EFFECT_NONE, 
                                              ShaderSystem::VIEW_ENDOSCOPE);
             shaderSystem.ApplyShader(pImpl->endoscopeActor, config);
             
-            endoscopeRenderer->AddActor(pImpl->endoscopeActor);
             std::cout << "Endoscope actor added to renderer with shader" << std::endl;
         }
     }

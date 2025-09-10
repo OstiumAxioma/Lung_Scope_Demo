@@ -116,6 +116,13 @@ markerActor->SetPosition(current->position); // ✅
   - 包含 `vtkOBJReader.h` 替代 `vtkSTLReader.h`
   - 更新文件对话框过滤器
 
+- 2025-01-10: 实现自定义Shader系统
+  - 创建了ShaderSystem类用于管理shader效果
+  - **重要教训**: VTK中正确使用自定义shader的方法
+    - ❌ 错误方法: 使用`SetVertexShaderCode()`和`SetFragmentShaderCode()`完全替换shader
+    - ✅ 正确方法: 使用`AddShaderReplacement()`替换特定的shader块
+  - 详见下方"Shader系统实现"章节
+
 ## Bug修复记录
 
 ### 1. 内窥镜视图黑屏问题
@@ -147,3 +154,51 @@ markerActor->SetPosition(current->position); // ✅
 **原因**: VTK对象引用计数管理错误  
 **修复**: 使用`Register/UnRegister`手动管理引用计数  
 **文件**: `static/src/CameraPath.cpp:148,165-167`
+
+### 6. Shader导致模型全白无阴影问题
+**症状**: 使用自定义shader后，模型显示为纯白色，无光照效果  
+**原因**: 错误使用`SetVertexShaderCode/SetFragmentShaderCode`完全替换了VTK的shader  
+**修复**: 改用`AddShaderReplacement`只替换特定shader块，保留VTK默认光照  
+**文件**: `static/src/ShaderSystem.cpp:235-306`
+
+## Shader系统实现
+
+### 关键认识
+VTK的shader系统不是简单的"替换整个shader"，而是基于**shader块替换**的机制。
+
+### 错误方法（导致全白渲染）
+```cpp
+// ❌ 完全替换shader - 破坏了VTK的渲染管线
+mapper->SetVertexShaderCode(customVertexShader);
+mapper->SetFragmentShaderCode(customFragmentShader);
+```
+
+### 正确方法（保留VTK光照）
+```cpp
+// ✅ 替换特定shader块 - 保留VTK默认功能
+mapper->AddShaderReplacement(
+    vtkShader::Fragment,
+    "//VTK::Light::Impl",  // 替换光照实现块
+    false,  // 在标准替换之后
+    "//VTK::Light::Impl\n"  // 保留默认光照
+    "  // 自定义代码\n"
+    "  vec3 rimLight = ...\n"
+    "  fragOutput0.rgb += rimLight;\n",
+    false  // 只做一次
+);
+```
+
+### VTK Shader替换点
+- `//VTK::System::Dec` - 系统声明
+- `//VTK::Normal::Dec` - 法线相关声明
+- `//VTK::Color::Impl` - 颜色实现
+- `//VTK::Light::Impl` - 光照实现
+- `//VTK::Output::Dec` - 输出声明
+
+### 当前实现
+- **Overview视图**: 增强边缘光照效果
+- **Endoscope视图**: 微红色调模拟真实组织
+
+### 参考资源
+- VTK官方示例: SpatterShader
+- 关键函数: `vtkOpenGLPolyDataMapper::AddShaderReplacement()`

@@ -2,7 +2,7 @@ attribute vec4 vertexMC;
 attribute vec3 normalMC;
 
 uniform mat4 MCDCMatrix;
-uniform mat4 MCVCMatrix; 
+uniform mat4 MCVCMatrix;
 uniform mat3 normalMatrix;
 
 varying vec3 normalVCVSOutput;

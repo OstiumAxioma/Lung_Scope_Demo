@@ -6,6 +6,7 @@
 #include <vtkRenderer.h>
 #include <vtkPolyDataMapper.h>
 #include <vtkProperty.h>
+#include <vtkShader.h>
 
 // Standard headers
 #include <iostream>
@@ -242,17 +243,65 @@ namespace BronchoscopyLib {
             Initialize();
         }
         
-        // 获取组合后的shader
-        std::string vertexShader = pImpl->CombineShaders(config, true);
-        std::string fragmentShader = pImpl->CombineShaders(config, false);
+        // 清除之前的shader替换
+        mapper->ClearAllShaderReplacements();
         
-        // 应用到mapper
-        mapper->SetVertexShaderCode(vertexShader.c_str());
-        mapper->SetFragmentShaderCode(fragmentShader.c_str());
+        // 根据视图类型应用不同的shader效果
+        if (config.view == VIEW_OVERVIEW) {
+            // Overview视图 - 增强边缘光照
+            mapper->AddShaderReplacement(
+                vtkShader::Fragment,
+                "//VTK::Light::Impl",  // 替换光照实现
+                false,  // 在标准替换之后
+                "//VTK::Light::Impl\n"  // 保留默认光照
+                "  // 增强边缘光照\n"
+                "  vec3 viewDir = normalize(-vertexVC.xyz);\n"
+                "  float rim = 1.0 - max(dot(viewDir, normalVCVSOutput), 0.0);\n"
+                "  rim = smoothstep(0.6, 1.0, rim);\n"
+                "  vec3 rimLight = vec3(0.2, 0.2, 0.25) * rim;\n"
+                "  fragOutput0.rgb += rimLight;\n",
+                false  // 只做一次
+            );
+            
+            // 调整基础颜色
+            mapper->AddShaderReplacement(
+                vtkShader::Fragment,
+                "//VTK::Color::Impl",
+                false,
+                "//VTK::Color::Impl\n"
+                "  // 微调颜色\n"
+                "  diffuseColor = vec3(0.85, 0.85, 0.8);\n"
+                "  ambientColor = vec3(0.3, 0.3, 0.3);\n",
+                false
+            );
+        }
+        else if (config.view == VIEW_ENDOSCOPE) {
+            // Endoscope视图 - 内窥镜效果，微红色调
+            mapper->AddShaderReplacement(
+                vtkShader::Fragment,
+                "//VTK::Color::Impl",
+                false,
+                "//VTK::Color::Impl\n"
+                "  // 内窥镜视图颜色调整\n"
+                "  diffuseColor = vec3(0.95, 0.75, 0.7);\n"
+                "  ambientColor = vec3(0.35, 0.25, 0.25);\n",
+                false
+            );
+            
+            // 调整镜面反射模拟湿润表面
+            mapper->AddShaderReplacement(
+                vtkShader::Fragment,
+                "//VTK::Light::Impl",
+                false,
+                "//VTK::Light::Impl\n"
+                "  // 增强镜面反射\n"
+                "  specular *= 1.5;\n",
+                false
+            );
+        }
         
-        std::cout << "ShaderSystem: Applied shader config (base=" << config.base 
-                 << ", effect=" << config.effect 
-                 << ", view=" << config.view << ")" << std::endl;
+        std::cout << "ShaderSystem: Applied shader replacements for view type " 
+                 << config.view << std::endl;
         
         return true;
     }
