@@ -10,6 +10,7 @@
 #include <vtkProperty.h>
 #include <vtkRenderer.h>
 #include <vtkPolyDataNormals.h>
+#include <vtkCleanPolyData.h>
 
 #include <iostream>
 
@@ -49,19 +50,37 @@ namespace BronchoscopyLib {
         void CreateMappers() {
             if (!airwayModel) return;
             
+            // 可选：清理模型数据
+            bool useCleanPolyData = true;  // 可以设置为false跳过清理
+            vtkPolyData* inputData = airwayModel;
+            
+            vtkSmartPointer<vtkCleanPolyData> cleaner;
+            if (useCleanPolyData) {
+                cleaner = vtkSmartPointer<vtkCleanPolyData>::New();
+                cleaner->SetInputData(airwayModel);
+                cleaner->SetTolerance(0.00001);  // 非常小的容差，只合并完全相同的点
+                cleaner->PointMergingOn();
+                cleaner->Update();
+                inputData = cleaner->GetOutput();
+                
+                std::cout << "ModelManager: Cleaned model - " 
+                         << "Original points: " << airwayModel->GetNumberOfPoints()
+                         << ", Cleaned points: " << inputData->GetNumberOfPoints() 
+                         << std::endl;
+            }
+            
             // 生成平滑法线
             vtkSmartPointer<vtkPolyDataNormals> normalGenerator = 
                 vtkSmartPointer<vtkPolyDataNormals>::New();
-            normalGenerator->SetInputData(airwayModel);
-            normalGenerator->ComputePointNormalsOn();
-            normalGenerator->ComputeCellNormalsOff();
+            normalGenerator->SetInputData(inputData);
             
-            // 设置特征角度 - 控制哪些边缘保持锐利
-            // 180度 = 完全平滑，30-60度 = 保留明显的边缘
-            normalGenerator->SetFeatureAngle(smoothingAngle);
+            // 设置特征角度 - 使用很高的角度实现完全平滑
+            normalGenerator->SetFeatureAngle(160.0);  // 增加到160度
             
-            // 分割锐利边缘
-            normalGenerator->SplittingOn();
+            // 关闭分割以获得完全平滑的效果
+            normalGenerator->SplittingOff();  // 不分割顶点
+            normalGenerator->ComputePointNormalsOn();   // 计算顶点法线
+            normalGenerator->ComputeCellNormalsOff();   // 不计算面法线
             
             // 确保法线一致性
             normalGenerator->ConsistencyOn();
@@ -137,6 +156,9 @@ namespace BronchoscopyLib {
         pImpl->overviewActor->GetProperty()->SetColor(pImpl->overviewColor);
         pImpl->overviewActor->GetProperty()->SetOpacity(pImpl->overviewOpacity);
         
+        // 设置为Gouraud插值（平滑着色）
+        pImpl->overviewActor->GetProperty()->SetInterpolationToGouraud();
+        
         return pImpl->overviewActor;
     }
     
@@ -149,6 +171,9 @@ namespace BronchoscopyLib {
         pImpl->endoscopeActor = vtkSmartPointer<vtkActor>::New();
         pImpl->endoscopeActor->SetMapper(pImpl->endoscopeMapper);
         pImpl->endoscopeActor->GetProperty()->SetColor(pImpl->endoscopeColor);
+        
+        // 设置为Gouraud插值（平滑着色）
+        pImpl->endoscopeActor->GetProperty()->SetInterpolationToGouraud();
         
         return pImpl->endoscopeActor;
     }

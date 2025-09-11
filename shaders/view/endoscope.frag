@@ -3,9 +3,9 @@
 
 //VTK::Color::Impl AFTER
 //VTK::Color::Impl
-  // 内窥镜视图颜色调整 - 微红色调模拟真实内窥镜
-  diffuseColor = vec3(0.95, 0.75, 0.7);
-  ambientColor = vec3(0.35, 0.25, 0.25);
+  // 内窥镜视图颜色调整 - 轻微的暖色调
+  diffuseColor = vec3(0.9, 0.85, 0.82);
+  ambientColor = vec3(0.25, 0.22, 0.2);
 END_REPLACEMENT
 
 //VTK::Light::Impl AFTER
