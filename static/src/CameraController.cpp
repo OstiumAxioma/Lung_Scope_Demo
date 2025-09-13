@@ -8,6 +8,13 @@
 #include <vtkMath.h>
 
 #include <iostream>
+#include <chrono>
+#include <cmath>
+#include <algorithm>
+
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
 
 namespace BronchoscopyLib {
     
@@ -25,12 +32,94 @@ namespace BronchoscopyLib {
         double endoscopeFOV;
         double endoscopeViewUp[3];
         
+        // 动画相关
+        bool isTransitioning;
+        double transitionProgress;      // 0.0 到 1.0
+        double transitionDuration;      // 动画持续时间（秒）
+        PathNode transitionStartNode;   // 动画起始状态
+        PathNode transitionTargetNode;  // 动画目标状态
+        std::chrono::steady_clock::time_point transitionStartTime;
+        
         Impl() : overviewRenderer(nullptr), endoscopeRenderer(nullptr), 
-                 endoscopeFOV(60.0) {
+                 endoscopeFOV(60.0),
+                 isTransitioning(false), transitionProgress(0.0), transitionDuration(0.5) {
             // 默认向上方向
             endoscopeViewUp[0] = 0.0;
             endoscopeViewUp[1] = 1.0;
             endoscopeViewUp[2] = 0.0;
+        }
+        
+        // 缓动函数：平滑的加速和减速
+        double EaseInOutCubic(double t) {
+            if (t < 0.5) {
+                return 4 * t * t * t;
+            } else {
+                double p = 2 * t - 2;
+                return 1 + p * p * p / 2;
+            }
+        }
+        
+        // 球面线性插值（SLERP）用于平滑旋转
+        void SlerpVectors(const double v1[3], const double v2[3], double t, double result[3]) {
+            // 计算两个向量的点积（夹角余弦）
+            double dot = vtkMath::Dot(v1, v2);
+            
+            // 限制dot在[-1, 1]范围内，避免acos的数值误差
+            dot = std::max(-1.0, std::min(1.0, dot));
+            
+            // 如果向量几乎平行，使用线性插值
+            if (dot > 0.9995) {
+                for (int i = 0; i < 3; i++) {
+                    result[i] = v1[i] + (v2[i] - v1[i]) * t;
+                }
+                vtkMath::Normalize(result);
+                return;
+            }
+            
+            // 如果向量几乎相反，需要特殊处理
+            if (dot < -0.9995) {
+                // 找一个垂直向量
+                double perpendicular[3];
+                if (std::abs(v1[0]) < 0.9) {
+                    perpendicular[0] = 1.0;
+                    perpendicular[1] = 0.0;
+                    perpendicular[2] = 0.0;
+                } else {
+                    perpendicular[0] = 0.0;
+                    perpendicular[1] = 1.0;
+                    perpendicular[2] = 0.0;
+                }
+                
+                // 计算垂直向量
+                double temp[3];
+                vtkMath::Cross(v1, perpendicular, temp);
+                vtkMath::Normalize(temp);
+                
+                // 旋转180度
+                double angle = M_PI * t;
+                double cosAngle = cos(angle);
+                double sinAngle = sin(angle);
+                
+                for (int i = 0; i < 3; i++) {
+                    result[i] = v1[i] * cosAngle + temp[i] * sinAngle;
+                }
+                return;
+            }
+            
+            // 计算夹角
+            double theta = acos(dot);
+            double sinTheta = sin(theta);
+            
+            // 计算插值权重
+            double w1 = sin((1.0 - t) * theta) / sinTheta;
+            double w2 = sin(t * theta) / sinTheta;
+            
+            // 球面插值
+            for (int i = 0; i < 3; i++) {
+                result[i] = v1[i] * w1 + v2[i] * w2;
+            }
+            
+            vtkMath::Normalize(result);
         }
     };
     
@@ -198,6 +287,116 @@ namespace BronchoscopyLib {
         }
         
         std::cout << "===================" << std::endl;
+    }
+    
+    void CameraController::StartTransition(const PathNode* targetNode) {
+        if (!targetNode || !pImpl->endoscopeCamera) return;
+        
+        // 保存当前相机状态作为起点
+        GetCurrentEndoscopeState(&pImpl->transitionStartNode);
+        
+        // 设置目标
+        pImpl->transitionTargetNode = *targetNode;
+        
+        // 计算两点之间的距离
+        double distance = 0.0;
+        for (int i = 0; i < 3; i++) {
+            double diff = pImpl->transitionTargetNode.position[i] - pImpl->transitionStartNode.position[i];
+            distance += diff * diff;
+        }
+        distance = sqrt(distance);
+        
+        // 根据距离动态计算过渡时间
+        // 基础时间0.3秒，每10个单位距离增加0.1秒，最大不超过1.5秒
+        double baseTime = 0.3;
+        double speedFactor = 0.01;  // 每单位距离的时间
+        pImpl->transitionDuration = baseTime + distance * speedFactor;
+        
+        // 限制最大和最小时间
+        if (pImpl->transitionDuration > 1.5) {
+            pImpl->transitionDuration = 1.5;
+        } else if (pImpl->transitionDuration < 0.2) {
+            pImpl->transitionDuration = 0.2;
+        }
+        
+        std::cout << "Transition distance: " << distance 
+                  << ", duration: " << pImpl->transitionDuration << "s" << std::endl;
+        
+        // 初始化动画参数
+        pImpl->isTransitioning = true;
+        pImpl->transitionProgress = 0.0;
+        pImpl->transitionStartTime = std::chrono::steady_clock::now();
+    }
+    
+    bool CameraController::UpdateTransition() {
+        if (!pImpl->isTransitioning) return false;
+        
+        // 计算经过的时间
+        auto currentTime = std::chrono::steady_clock::now();
+        std::chrono::duration<double> elapsed = currentTime - pImpl->transitionStartTime;
+        double elapsedSeconds = elapsed.count();
+        
+        // 计算进度
+        pImpl->transitionProgress = elapsedSeconds / pImpl->transitionDuration;
+        
+        if (pImpl->transitionProgress >= 1.0) {
+            // 动画完成
+            pImpl->transitionProgress = 1.0;
+            pImpl->isTransitioning = false;
+        }
+        
+        // 应用缓动函数
+        double easedProgress = pImpl->EaseInOutCubic(pImpl->transitionProgress);
+        
+        // 插值位置
+        double interpolatedPos[3];
+        for (int i = 0; i < 3; i++) {
+            interpolatedPos[i] = pImpl->transitionStartNode.position[i] + 
+                               (pImpl->transitionTargetNode.position[i] - pImpl->transitionStartNode.position[i]) * easedProgress;
+        }
+        
+        // 使用球面插值(SLERP)插值方向，实现平滑旋转
+        double interpolatedDir[3];
+        pImpl->SlerpVectors(pImpl->transitionStartNode.direction, 
+                           pImpl->transitionTargetNode.direction, 
+                           easedProgress, 
+                           interpolatedDir);
+        
+        // 更新相机
+        UpdateEndoscopeCamera(interpolatedPos, interpolatedDir);
+        
+        return pImpl->isTransitioning;  // 返回动画是否还在进行
+    }
+    
+    void CameraController::SetTransitionDuration(double seconds) {
+        if (seconds > 0.0) {
+            pImpl->transitionDuration = seconds;
+        }
+    }
+    
+    bool CameraController::IsTransitioning() const {
+        return pImpl->isTransitioning;
+    }
+    
+    void CameraController::GetCurrentEndoscopeState(PathNode* state) const {
+        if (!state || !pImpl->endoscopeCamera) return;
+        
+        pImpl->endoscopeCamera->GetPosition(state->position);
+        
+        // 计算方向向量（从位置指向焦点）
+        double focalPoint[3];
+        pImpl->endoscopeCamera->GetFocalPoint(focalPoint);
+        for (int i = 0; i < 3; i++) {
+            state->direction[i] = focalPoint[i] - state->position[i];
+        }
+        
+        // 归一化方向
+        double length = vtkMath::Norm(state->direction);
+        if (length > 0) {
+            for (int i = 0; i < 3; i++) {
+                state->direction[i] /= length;
+            }
+        }
     }
     
 } // namespace BronchoscopyLib

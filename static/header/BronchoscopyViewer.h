@@ -52,6 +52,10 @@ namespace BronchoscopyLib {
         int GetTotalPathNodes() const;
         bool IsPlaying() const;
         
+        // 动画更新（需要在渲染循环中调用）
+        bool UpdateAnimation();  // 返回true表示动画正在进行
+        void SetAnimationDuration(double seconds);  // 设置动画持续时间
+        
         // 可视化控制
         void ShowPath(bool show);
         void ShowPositionMarker(bool show);

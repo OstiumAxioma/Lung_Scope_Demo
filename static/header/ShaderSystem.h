@@ -36,8 +36,9 @@ namespace BronchoscopyLib {
         // 视图特定shader
         enum ViewShader {
             VIEW_NONE,
-            VIEW_ENDOSCOPE,  // 腔镜视图特效
-            VIEW_OVERVIEW    // 全局视图特效
+            VIEW_ENDOSCOPE,          // 腔镜视图特效
+            VIEW_OVERVIEW,           // 全局视图特效
+            VIEW_REALISTIC_ENDOSCOPE // 真实内窥镜效果
         };
         
         // 后处理shader（简化版，只有FXAA）
@@ -49,7 +50,8 @@ namespace BronchoscopyLib {
         // 材质shader
         enum MaterialShader {
             MATERIAL_NONE,
-            MATERIAL_TISSUE   // 组织材质（平滑光照、次表面散射）
+            MATERIAL_TISSUE,      // 组织材质（平滑光照、次表面散射）
+            MATERIAL_PBR_TISSUE   // PBR组织材质（基于物理的渲染）
         };
         
         // Shader配置

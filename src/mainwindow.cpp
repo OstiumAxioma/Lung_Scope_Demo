@@ -35,7 +35,9 @@ MainWindow::MainWindow(QWidget *parent)
     , overviewWidget(nullptr)
     , endoscopeWidget(nullptr)
     , autoPlayTimer(nullptr)
+    , animationTimer(nullptr)
     , isPlaying(false)
+    , isAnimating(false)
     , bronchoscopyAPI(std::make_unique<BronchoscopyLib::BronchoscopyAPI>())
 {
     setWindowTitle("支气管腔镜可视化系统");
@@ -55,6 +57,11 @@ MainWindow::MainWindow(QWidget *parent)
     // 设置自动播放定时器
     autoPlayTimer = new QTimer(this);
     connect(autoPlayTimer, &QTimer::timeout, this, &MainWindow::navigateNext);
+    
+    // 设置动画更新定时器（60FPS）
+    animationTimer = new QTimer(this);
+    animationTimer->setInterval(16);  // 约60FPS
+    connect(animationTimer, &QTimer::timeout, this, &MainWindow::updateAnimation);
 }
 
 MainWindow::~MainWindow()
@@ -366,6 +373,11 @@ void MainWindow::loadCameraPath()
 
 void MainWindow::navigateNext()
 {
+    // 如果正在动画中，跳过
+    if (isAnimating) {
+        return;
+    }
+    
     bronchoscopyAPI->MoveToNext();
     int current = bronchoscopyAPI->GetCurrentNodeIndex() + 1;
     int total = bronchoscopyAPI->GetTotalPathNodes();
@@ -374,8 +386,9 @@ void MainWindow::navigateNext()
     // 调试输出
     qDebug() << "Current index:" << (current-1) << "Total nodes:" << total;
     
-    // 强制刷新endoscope视图
-    endoscopeWidget->GetRenderWindow()->Render();
+    // 启动动画定时器
+    isAnimating = true;
+    animationTimer->start();
     
     // 如果到达末尾，停止自动播放
     if (current >= total && isPlaying) {
@@ -385,13 +398,19 @@ void MainWindow::navigateNext()
 
 void MainWindow::navigatePrevious()
 {
+    // 如果正在动画中，跳过
+    if (isAnimating) {
+        return;
+    }
+    
     bronchoscopyAPI->MoveToPrevious();
     int current = bronchoscopyAPI->GetCurrentNodeIndex() + 1;
     int total = bronchoscopyAPI->GetTotalPathNodes();
     statusLabel->setText(QString("路径: %1/%2").arg(current).arg(total));
     
-    // 强制刷新endoscope视图
-    endoscopeWidget->GetRenderWindow()->Render();
+    // 启动动画定时器
+    isAnimating = true;
+    animationTimer->start();
 }
 
 void MainWindow::resetNavigation()
@@ -458,5 +477,25 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
             break;
         default:
             QMainWindow::keyPressEvent(event);
+    }
+}
+
+void MainWindow::updateAnimation()
+{
+    // 调用API的动画更新函数
+    bool stillAnimating = bronchoscopyAPI->UpdateAnimation();
+    
+    // 刷新渲染窗口
+    if (overviewWidget) {
+        overviewWidget->GetRenderWindow()->Render();
+    }
+    if (endoscopeWidget) {
+        endoscopeWidget->GetRenderWindow()->Render();
+    }
+    
+    // 如果动画结束，停止定时器
+    if (!stillAnimating) {
+        animationTimer->stop();
+        isAnimating = false;
     }
 }

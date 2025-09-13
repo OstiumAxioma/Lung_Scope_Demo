@@ -14,6 +14,8 @@
 #include <vtkCamera.h>
 #include <vtkSphereSource.h>
 #include <vtkProperty.h>
+#include <vtkLight.h>
+#include <vtkLightCollection.h>
 // 文件读取由主程序负责，静态库不处理文件I/O
 // #include <vtkPolyDataReader.h>
 // #include <vtkXMLPolyDataReader.h>
@@ -27,8 +29,6 @@
 #include <vtkTransformPolyDataFilter.h>
 
 #include <iostream>
-#include <thread>
-#include <chrono>
 
 namespace BronchoscopyLib {
 
@@ -124,6 +124,18 @@ namespace BronchoscopyLib {
                 overviewWindow->Render();
             }
         }
+        
+        void UpdatePositionMarkerWithPos(const double pos[3]) {
+            if (!markerActor) return;
+            
+            // VTK的SetPosition需要非const参数，所以复制一份
+            markerActor->SetPosition(pos[0], pos[1], pos[2]);
+            overviewRenderer->Modified();
+            
+            if (overviewWindow) {
+                overviewWindow->Render();
+            }
+        }
     };
 
     BronchoscopyViewer::BronchoscopyViewer() : pImpl(std::make_unique<Impl>()) {
@@ -148,6 +160,32 @@ namespace BronchoscopyLib {
         
         // 只在overview中显示标记
         pImpl->overviewRenderer->AddActor(pImpl->markerActor);
+        
+        // 创建内窥镜视图的头灯（跟随相机的光源）
+        vtkSmartPointer<vtkLight> endoscopeHeadLight = vtkSmartPointer<vtkLight>::New();
+        endoscopeHeadLight->SetLightTypeToHeadlight();  // 设置为头灯类型，自动跟随相机
+        endoscopeHeadLight->SetIntensity(1.5);          // 增强亮度使效果更明显
+        endoscopeHeadLight->SetColor(1.0, 0.98, 0.96);  // 轻微暖白色，模拟内窥镜光源
+        endoscopeHeadLight->SetPositional(true);        // 设置为点光源（而不是方向光）
+        endoscopeHeadLight->SetConeAngle(60);           // 设置光锥角度（聚光灯效果）
+        endoscopeHeadLight->SetExponent(10.0);          // 设置聚光灯衰减指数
+        
+        // 移除默认光源，只使用我们的头灯
+        pImpl->endoscopeRenderer->RemoveAllLights();
+        pImpl->endoscopeRenderer->AddLight(endoscopeHeadLight);
+        
+        // 确保光源跟随相机
+        pImpl->endoscopeRenderer->LightFollowCameraOn();
+        
+        // 调试：检查光源状态
+        std::cout << "BronchoscopyViewer: HeadLight created for endoscope view" << std::endl;
+        std::cout << "  Light type: " << endoscopeHeadLight->GetLightType() 
+                  << " (2=HeadLight)" << std::endl;
+        std::cout << "  Light intensity: " << endoscopeHeadLight->GetIntensity() << std::endl;
+        std::cout << "  Number of lights in endoscope renderer: " 
+                  << pImpl->endoscopeRenderer->GetLights()->GetNumberOfItems() << std::endl;
+        std::cout << "  LightFollowCamera: " << pImpl->endoscopeRenderer->GetLightFollowCamera() 
+                  << std::endl;
     }
 
     // 文件读取由主程序负责，静态库只处理数据
@@ -298,16 +336,36 @@ namespace BronchoscopyLib {
     }
 
     void BronchoscopyViewer::MoveToNext() {
-        if (pImpl->cameraPath && pImpl->cameraPath->MoveNext()) {
-            pImpl->UpdateEndoscopeCamera();
-            pImpl->UpdatePositionMarker();
+        if (!pImpl->cameraPath) return;
+        
+        // 如果正在动画中，跳过
+        if (pImpl->cameraController->IsTransitioning()) {
+            return;
+        }
+        
+        // 获取下一个节点
+        if (pImpl->cameraPath->MoveNext()) {
+            PathNode* nextNode = pImpl->cameraPath->GetCurrent();
+            
+            // 通过CameraController启动动画过渡
+            pImpl->cameraController->StartTransition(nextNode);
         }
     }
 
     void BronchoscopyViewer::MoveToPrevious() {
-        if (pImpl->cameraPath && pImpl->cameraPath->MovePrevious()) {
-            pImpl->UpdateEndoscopeCamera();
-            pImpl->UpdatePositionMarker();
+        if (!pImpl->cameraPath) return;
+        
+        // 如果正在动画中，跳过
+        if (pImpl->cameraController->IsTransitioning()) {
+            return;
+        }
+        
+        // 获取前一个节点
+        if (pImpl->cameraPath->MovePrevious()) {
+            PathNode* prevNode = pImpl->cameraPath->GetCurrent();
+            
+            // 通过CameraController启动动画过渡
+            pImpl->cameraController->StartTransition(prevNode);
         }
     }
 
@@ -344,6 +402,27 @@ namespace BronchoscopyLib {
 
     bool BronchoscopyViewer::IsPlaying() const {
         return pImpl->isPlaying;
+    }
+    
+    bool BronchoscopyViewer::UpdateAnimation() {
+        bool isAnimating = pImpl->cameraController->UpdateTransition();
+        
+        // 如果动画正在进行，更新标记位置
+        if (isAnimating) {
+            PathNode currentState;
+            pImpl->cameraController->GetCurrentEndoscopeState(&currentState);
+            pImpl->UpdatePositionMarkerWithPos(currentState.position);
+            
+            // 触发渲染
+            if (pImpl->overviewWindow) pImpl->overviewWindow->Render();
+            if (pImpl->endoscopeWindow) pImpl->endoscopeWindow->Render();
+        }
+        
+        return isAnimating;
+    }
+    
+    void BronchoscopyViewer::SetAnimationDuration(double seconds) {
+        pImpl->cameraController->SetTransitionDuration(seconds);
     }
 
     void BronchoscopyViewer::ShowPath(bool show) {

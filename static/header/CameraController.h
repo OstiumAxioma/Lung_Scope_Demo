@@ -47,6 +47,15 @@ namespace BronchoscopyLib {
         // 获取相机状态（用于调试）
         void PrintCameraStatus(bool overview = true, bool endoscope = true) const;
         
+        // 动画过渡相关
+        void StartTransition(const PathNode* targetNode);
+        bool UpdateTransition();  // 返回true表示动画正在进行
+        void SetTransitionDuration(double seconds);
+        bool IsTransitioning() const;
+        
+        // 获取当前相机状态
+        void GetCurrentEndoscopeState(PathNode* state) const;
+        
     private:
         class Impl;
         std::unique_ptr<Impl> pImpl;

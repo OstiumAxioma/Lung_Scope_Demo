@@ -64,6 +64,10 @@ namespace BronchoscopyLib {
         void ResetCameras();
         void Render();
         
+        // Animation control
+        bool UpdateAnimation();
+        void SetAnimationDuration(double seconds);
+        
         // Query state
         bool HasModel() const;
         bool HasPath() const;

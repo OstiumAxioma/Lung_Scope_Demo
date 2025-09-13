@@ -107,12 +107,22 @@ namespace BronchoscopyLib {
     
     void BronchoscopyAPI::MoveToNext() {
         if (pImpl->navigationController->MoveToNext()) {
+            // 获取目标节点并启动动画过渡
+            PathNode* targetNode = pImpl->navigationController->GetCurrentNode();
+            if (targetNode) {
+                pImpl->cameraController->StartTransition(targetNode);
+            }
             pImpl->UpdateViews();
         }
     }
     
     void BronchoscopyAPI::MoveToPrevious() {
         if (pImpl->navigationController->MoveToPrevious()) {
+            // 获取目标节点并启动动画过渡
+            PathNode* targetNode = pImpl->navigationController->GetCurrentNode();
+            if (targetNode) {
+                pImpl->cameraController->StartTransition(targetNode);
+            }
             pImpl->UpdateViews();
         }
     }
@@ -299,6 +309,23 @@ namespace BronchoscopyLib {
     void BronchoscopyAPI::SetEndoscopeBackground(double r, double g, double b) {
         pImpl->renderingEngine->SetEndoscopeBackground(r, g, b);
         Render();
+    }
+    
+    // Animation control
+    bool BronchoscopyAPI::UpdateAnimation() {
+        // 更新相机动画过渡
+        bool isAnimating = pImpl->cameraController->UpdateTransition();
+        
+        // 如果正在动画，更新场景
+        if (isAnimating) {
+            pImpl->UpdateViews();
+        }
+        
+        return isAnimating;
+    }
+    
+    void BronchoscopyAPI::SetAnimationDuration(double seconds) {
+        pImpl->cameraController->SetTransitionDuration(seconds);
     }
     
 } // namespace BronchoscopyLib

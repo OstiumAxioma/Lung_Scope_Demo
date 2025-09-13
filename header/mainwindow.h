@@ -47,6 +47,7 @@ private slots:
     void navigatePrevious();
     void resetNavigation();
     void toggleAutoPlay();
+    void updateAnimation();  // 更新动画帧
 
 protected:
     void keyPressEvent(QKeyEvent *event) override;
@@ -80,9 +81,11 @@ private:
     // 使用静态库的支气管镜API
     std::unique_ptr<BronchoscopyLib::BronchoscopyAPI> bronchoscopyAPI;
     
-    // 自动播放定时器
-    QTimer *autoPlayTimer;
+    // 定时器
+    QTimer *autoPlayTimer;     // 自动播放定时器
+    QTimer *animationTimer;     // 动画更新定时器
     bool isPlaying;
+    bool isAnimating;           // 是否正在动画过渡中
 };
 
 #endif // MAINWINDOW_H
