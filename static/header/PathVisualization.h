@@ -58,6 +58,8 @@ namespace BronchoscopyLib {
         void SetPathOpacity(double opacity);
         void SetMarkerRadius(double radius);
         void SetPathTubeRadius(double radius);
+        // 线条粗细（用于内窥镜视图中的线条路径）
+        void SetPathLineWidth(double width);
         
         // 获取路径对象
         CameraPath* GetCameraPath() const;

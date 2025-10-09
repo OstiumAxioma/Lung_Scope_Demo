@@ -67,6 +67,8 @@ namespace BronchoscopyLib {
         int GetSegmentCount() const { return nodeCount > 1 ? (nodeCount - 1) : 0; }
         // 在给定段index与局部参数u(0..1)上获取样条位置与切向（方向）
         void GetSplinePosDirBetween(int segmentIndex, double u, double pos[3], double dir[3]) const;
+        // 按全局参数t∈[0,1]获取样条位置与方向
+        void GetSplinePosDirGlobal(double t, double pos[3], double dir[3]) const;
         
     private:
         PathNode* head;

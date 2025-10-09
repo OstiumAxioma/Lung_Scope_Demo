@@ -200,6 +200,11 @@ namespace BronchoscopyLib {
         pImpl->modelManager->SetOverviewOpacity(opacity);
         Render();
     }
+
+    void BronchoscopyAPI::SetPathLineWidth(double width) {
+        pImpl->pathVisualization->SetPathLineWidth(width);
+        Render();
+    }
     
     void BronchoscopyAPI::ResetCameras() {
         pImpl->sceneManager->ResetCameras();
@@ -312,9 +317,14 @@ namespace BronchoscopyLib {
         }
         return isAnimating;
     }
-    
+
     void BronchoscopyAPI::SetAnimationDuration(double seconds) {
         pImpl->cameraController->SetTransitionDuration(seconds);
+    }
+
+    void BronchoscopyAPI::SetSplineT(double t) {
+        pImpl->sceneManager->SetSplineT(t);
+        Render();
     }
     
 } // namespace BronchoscopyLib

@@ -47,9 +47,8 @@ namespace BronchoscopyLib {
         // 获取相机状态（用于调试）
         void PrintCameraStatus(bool overview = true, bool endoscope = true) const;
         
-        // 动画过渡相关
-        void StartTransition(const PathNode* targetNode);
-        bool UpdateTransition();  // 返回true表示动画正在进行
+        // 动画过渡相关（过渡接口已移除StartTransition，保留更新/状态用于兼容旧调用路径）
+        bool UpdateTransition();  // 返回true表示动画正在进行（若无过渡则返回false）
         void SetTransitionDuration(double seconds);
         bool IsTransitioning() const;
         

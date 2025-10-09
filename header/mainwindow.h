@@ -9,6 +9,7 @@ VTK_MODULE_INIT(vtkInteractionStyle)
 #include <QMainWindow>
 #include <memory>
 #include <QKeyEvent>
+class QSlider;
 
 QT_BEGIN_NAMESPACE
 class QAction;
@@ -43,11 +44,9 @@ private slots:
     void setupDualViewWidget();
     void loadAirwayModel();
     void loadCameraPath();
-    void navigateNext();
-    void navigatePrevious();
     void resetNavigation();
-    void toggleAutoPlay();
     void updateAnimation();  // 更新动画帧
+    void onSplineSliderChanged(int value);
 
 protected:
     void keyPressEvent(QKeyEvent *event) override;
@@ -64,16 +63,14 @@ private:
     QMenu *helpMenu;
     QToolBar *fileToolBar;
     QToolBar *navigationToolBar;
+    QSlider *splineSlider;
     
     // 动作
     QAction *loadModelAct;
     QAction *loadPathAct;
     QAction *exitAct;
     QAction *aboutAct;
-    QAction *nextAct;
-    QAction *previousAct;
     QAction *resetAct;
-    QAction *playAct;
     
     // 状态标签
     QLabel *statusLabel;
@@ -82,10 +79,9 @@ private:
     std::unique_ptr<BronchoscopyLib::BronchoscopyAPI> bronchoscopyAPI;
     
     // 定时器
-    QTimer *autoPlayTimer;     // 自动播放定时器
     QTimer *animationTimer;     // 动画更新定时器
-    bool isPlaying;
     bool isAnimating;           // 是否正在动画过渡中
+    double currentT = 0.0;      // 样条全局参数（0..1）
 };
 
 #endif // MAINWINDOW_H

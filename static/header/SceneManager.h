@@ -60,6 +60,9 @@ namespace BronchoscopyLib {
         bool OnModelLoaded(vtkPolyData* polyData);
         void OnPathLoaded();
         void OnNavigationChanged(PathNode* node, int index);
+
+        // 样条全局参数控制（0.0..1.0）
+        void SetSplineT(double t);
         
         // 渲染触发
         void RequestRender();

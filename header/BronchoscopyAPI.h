@@ -59,6 +59,8 @@ namespace BronchoscopyLib {
         void SetPathOpacity(double opacity);
         void SetMarkerRadius(double radius);
         void SetModelOpacity(double opacity);
+        // 新增：内窥镜视图路径线宽（像素）
+        void SetPathLineWidth(double width);
         
         // Camera control
         void ResetCameras();
@@ -67,6 +69,8 @@ namespace BronchoscopyLib {
         // Animation control
         bool UpdateAnimation();
         void SetAnimationDuration(double seconds);
+        // Spline control
+        void SetSplineT(double t);
         
         // Query state
         bool HasModel() const;

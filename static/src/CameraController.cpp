@@ -289,44 +289,7 @@ namespace BronchoscopyLib {
         std::cout << "===================" << std::endl;
     }
     
-    void CameraController::StartTransition(const PathNode* targetNode) {
-        if (!targetNode || !pImpl->endoscopeCamera) return;
-        
-        // 保存当前相机状态作为起点
-        GetCurrentEndoscopeState(&pImpl->transitionStartNode);
-        
-        // 设置目标
-        pImpl->transitionTargetNode = *targetNode;
-        
-        // 计算两点之间的距离
-        double distance = 0.0;
-        for (int i = 0; i < 3; i++) {
-            double diff = pImpl->transitionTargetNode.position[i] - pImpl->transitionStartNode.position[i];
-            distance += diff * diff;
-        }
-        distance = sqrt(distance);
-        
-        // 根据距离动态计算过渡时间
-        // 基础时间0.3秒，每10个单位距离增加0.1秒，最大不超过1.5秒
-        double baseTime = 0.3;
-        double speedFactor = 0.01;  // 每单位距离的时间
-        pImpl->transitionDuration = baseTime + distance * speedFactor;
-        
-        // 限制最大和最小时间
-        if (pImpl->transitionDuration > 1.5) {
-            pImpl->transitionDuration = 1.5;
-        } else if (pImpl->transitionDuration < 0.2) {
-            pImpl->transitionDuration = 0.2;
-        }
-        
-        std::cout << "Transition distance: " << distance 
-                  << ", duration: " << pImpl->transitionDuration << "s" << std::endl;
-        
-        // 初始化动画参数
-        pImpl->isTransitioning = true;
-        pImpl->transitionProgress = 0.0;
-        pImpl->transitionStartTime = std::chrono::steady_clock::now();
-    }
+    // StartTransition 已移除
     
     bool CameraController::UpdateTransition() {
         if (!pImpl->isTransitioning) return false;

@@ -195,7 +195,7 @@ namespace BronchoscopyLib {
             if (pImpl->renderingEngine) {
                 pImpl->pathVisualization->RemoveFromRenderers(
                     pImpl->renderingEngine->GetOverviewRenderer(),
-                    nullptr);
+                    pImpl->renderingEngine->GetEndoscopeRenderer());
             }
             
             // 清理路径数据
@@ -284,7 +284,7 @@ namespace BronchoscopyLib {
         if (pImpl->renderingEngine) {
             pImpl->pathVisualization->AddToRenderers(
                 pImpl->renderingEngine->GetOverviewRenderer(),
-                nullptr);  // 路径只在overview中显示
+                pImpl->renderingEngine->GetEndoscopeRenderer());
         }
         
         // 设置导航控制器
@@ -374,6 +374,23 @@ namespace BronchoscopyLib {
         }
         pImpl->TriggerRender();
         return pImpl->splineAnimating;
+    }
+
+    void SceneManager::SetSplineT(double t) {
+        pImpl->splineAnimating = false; // 直接定位不启用动画
+        if (!pImpl->pathVisualization) return;
+        CameraPath* path = pImpl->pathVisualization->GetCameraPath();
+        if (!path) return;
+
+        double pos[3], dir[3];
+        path->GetSplinePosDirGlobal(t, pos, dir);
+        if (pImpl->cameraController) {
+            pImpl->cameraController->UpdateEndoscopeCamera(pos, dir);
+        }
+        if (pImpl->pathVisualization && pImpl->showMarker) {
+            pImpl->pathVisualization->UpdatePositionMarker(pos);
+        }
+        pImpl->TriggerRender();
     }
     
     void SceneManager::RequestRender() {

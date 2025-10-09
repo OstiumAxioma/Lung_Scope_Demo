@@ -10,6 +10,7 @@
 #include <QSplitter>
 #include <QTimer>
 #include <QLabel>
+#include <QSlider>
 #include <QVTKOpenGLWidget.h>
 #include <QKeyEvent>
 #include <QDebug>
@@ -34,9 +35,7 @@ MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
     , overviewWidget(nullptr)
     , endoscopeWidget(nullptr)
-    , autoPlayTimer(nullptr)
     , animationTimer(nullptr)
-    , isPlaying(false)
     , isAnimating(false)
     , bronchoscopyAPI(std::make_unique<BronchoscopyLib::BronchoscopyAPI>())
 {
@@ -53,10 +52,6 @@ MainWindow::MainWindow(QWidget *parent)
     
     // 设置双窗口界面
     setupDualViewWidget();
-    
-    // 设置自动播放定时器
-    autoPlayTimer = new QTimer(this);
-    connect(autoPlayTimer, &QTimer::timeout, this, &MainWindow::navigateNext);
     
     // 设置动画更新定时器（60FPS）
     animationTimer = new QTimer(this);
@@ -86,18 +81,7 @@ void MainWindow::createActions()
     exitAct->setStatusTip("退出应用程序");
     connect(exitAct, &QAction::triggered, this, &QWidget::close);
     
-    // 导航菜单动作
-    nextAct = new QAction("前进(&N)", this);
-    nextAct->setShortcut(QKeySequence("Right"));
-    nextAct->setStatusTip("沿路径前进");
-    nextAct->setEnabled(false);
-    connect(nextAct, &QAction::triggered, this, &MainWindow::navigateNext);
-    
-    previousAct = new QAction("后退(&B)", this);
-    previousAct->setShortcut(QKeySequence("Left"));
-    previousAct->setStatusTip("沿路径后退");
-    previousAct->setEnabled(false);
-    connect(previousAct, &QAction::triggered, this, &MainWindow::navigatePrevious);
+    // 导航菜单动作（仅保留重置）
     
     resetAct = new QAction("重置(&R)", this);
     resetAct->setShortcut(QKeySequence("Home"));
@@ -105,12 +89,6 @@ void MainWindow::createActions()
     resetAct->setEnabled(false);
     connect(resetAct, &QAction::triggered, this, &MainWindow::resetNavigation);
     
-    playAct = new QAction("播放/暂停(&P)", this);
-    playAct->setShortcut(QKeySequence("Space"));
-    playAct->setStatusTip("自动播放路径");
-    playAct->setEnabled(false);
-    playAct->setCheckable(true);
-    connect(playAct, &QAction::triggered, this, &MainWindow::toggleAutoPlay);
     
     // 帮助菜单动作
     aboutAct = new QAction("关于(&A)", this);
@@ -135,13 +113,9 @@ void MainWindow::createMenus()
     fileMenu->addSeparator();
     fileMenu->addAction(exitAct);
     
-    // 导航菜单
+    // 导航菜单（仅保留重置）
     navigationMenu = menuBar()->addMenu("导航(&N)");
-    navigationMenu->addAction(previousAct);
-    navigationMenu->addAction(nextAct);
     navigationMenu->addAction(resetAct);
-    navigationMenu->addSeparator();
-    navigationMenu->addAction(playAct);
     
     // 视图菜单
     viewMenu = menuBar()->addMenu("视图(&V)");
@@ -171,13 +145,17 @@ void MainWindow::createToolBars()
     fileToolBar->addAction(loadModelAct);
     fileToolBar->addAction(loadPathAct);
     
-    // 导航工具栏
+    // 导航工具栏（改为滑条控制全局T）
     navigationToolBar = addToolBar("导航");
-    navigationToolBar->addAction(previousAct);
-    navigationToolBar->addAction(nextAct);
-    navigationToolBar->addAction(resetAct);
-    navigationToolBar->addSeparator();
-    navigationToolBar->addAction(playAct);
+    
+    // 添加滑条
+    splineSlider = new QSlider(Qt::Horizontal, this);
+    splineSlider->setRange(0, 1000); // 0.000 .. 1.000
+    splineSlider->setTickInterval(50);
+    splineSlider->setEnabled(false);
+    navigationToolBar->addWidget(new QLabel("T:"));
+    navigationToolBar->addWidget(splineSlider);
+    connect(splineSlider, &QSlider::valueChanged, this, &MainWindow::onSplineSliderChanged);
 }
 
 void MainWindow::createStatusBar()
@@ -354,13 +332,13 @@ void MainWindow::loadCameraPath()
     if (!positions.empty() && bronchoscopyAPI->LoadCameraPath(positions)) {
         int total = bronchoscopyAPI->GetTotalPathNodes();
         statusBar()->showMessage(QString("成功加载路径: %1 (%2个节点)").arg(fileName).arg(total), 3000);
-        statusLabel->setText(QString("路径: 1/%1").arg(total));
+        statusLabel->setText("T = 0.000");
         
-        // 启用导航控制
-        nextAct->setEnabled(true);
-        previousAct->setEnabled(true);
-        resetAct->setEnabled(true);
-        playAct->setEnabled(true);
+        // 启用滑条控制，禁用旧导航按钮
+        if (splineSlider) {
+            splineSlider->setEnabled(true);
+            splineSlider->setValue(0);
+        }
         
         // 强制刷新endoscope视图（相机位置已更新）
         endoscopeWidget->GetRenderWindow()->Render();
@@ -371,47 +349,7 @@ void MainWindow::loadCameraPath()
     }
 }
 
-void MainWindow::navigateNext()
-{
-    // 如果正在动画中，跳过
-    if (isAnimating) {
-        return;
-    }
-    
-    bronchoscopyAPI->MoveToNext();
-    int current = bronchoscopyAPI->GetCurrentNodeIndex() + 1;
-    int total = bronchoscopyAPI->GetTotalPathNodes();
-    statusLabel->setText(QString("路径: %1/%2").arg(current).arg(total));
-    
-    // 调试输出
-    qDebug() << "Current index:" << (current-1) << "Total nodes:" << total;
-    
-    // 启动动画定时器
-    isAnimating = true;
-    animationTimer->start();
-    
-    // 如果到达末尾，停止自动播放
-    if (current >= total && isPlaying) {
-        toggleAutoPlay();
-    }
-}
-
-void MainWindow::navigatePrevious()
-{
-    // 如果正在动画中，跳过
-    if (isAnimating) {
-        return;
-    }
-    
-    bronchoscopyAPI->MoveToPrevious();
-    int current = bronchoscopyAPI->GetCurrentNodeIndex() + 1;
-    int total = bronchoscopyAPI->GetTotalPathNodes();
-    statusLabel->setText(QString("路径: %1/%2").arg(current).arg(total));
-    
-    // 启动动画定时器
-    isAnimating = true;
-    animationTimer->start();
-}
+// 已移除 navigateNext/navigatePrevious（改用样条T控制）
 
 void MainWindow::resetNavigation()
 {
@@ -419,61 +357,16 @@ void MainWindow::resetNavigation()
     int total = bronchoscopyAPI->GetTotalPathNodes();
     statusLabel->setText(QString("路径: 1/%1").arg(total));
     
-    // 停止自动播放
-    if (isPlaying) {
-        toggleAutoPlay();
-    }
+    // 清理：不再支持自动播放
 }
 
-void MainWindow::toggleAutoPlay()
-{
-    isPlaying = !isPlaying;
-    
-    if (isPlaying) {
-        autoPlayTimer->start(100); // 每100ms前进一步
-        statusBar()->showMessage("开始自动播放", 2000);
-        playAct->setText("暂停(&P)");
-    } else {
-        autoPlayTimer->stop();
-        statusBar()->showMessage("停止自动播放", 2000);
-        playAct->setText("播放(&P)");
-    }
-}
+// 已移除 toggleAutoPlay（不再支持自动播放）
 
 void MainWindow::keyPressEvent(QKeyEvent *event)
 {
     switch (event->key()) {
-        case Qt::Key_Right:
-        case Qt::Key_Up:
-            if (nextAct->isEnabled()) navigateNext();
-            break;
-        case Qt::Key_Left:
-        case Qt::Key_Down:
-            if (previousAct->isEnabled()) navigatePrevious();
-            break;
         case Qt::Key_Home:
             if (resetAct->isEnabled()) resetNavigation();
-            break;
-        case Qt::Key_Space:
-            if (playAct->isEnabled()) toggleAutoPlay();
-            break;
-        case Qt::Key_Plus:
-            if (autoPlayTimer && isPlaying) {
-                int interval = autoPlayTimer->interval();
-                if (interval > 20) {
-                    autoPlayTimer->setInterval(interval - 20);
-                    statusBar()->showMessage(QString("播放速度: %1ms").arg(interval - 20), 1000);
-                }
-            }
-            break;
-        case Qt::Key_Minus:
-            if (autoPlayTimer && isPlaying) {
-                int interval = autoPlayTimer->interval();
-                if (interval < 1000) {
-                    autoPlayTimer->setInterval(interval + 20);
-                    statusBar()->showMessage(QString("播放速度: %1ms").arg(interval + 20), 1000);
-                }
-            }
             break;
         default:
             QMainWindow::keyPressEvent(event);
@@ -498,4 +391,22 @@ void MainWindow::updateAnimation()
         animationTimer->stop();
         isAnimating = false;
     }
+}
+
+void MainWindow::onSplineSliderChanged(int value)
+{
+    // 停止任何动画/自动播放
+    if (animationTimer) animationTimer->stop();
+    isAnimating = false;
+    // 不再支持自动播放，清理相关状态
+
+    currentT = std::max(0, value) / 1000.0;
+    bronchoscopyAPI->SetSplineT(currentT);
+
+    // 更新状态栏
+    statusLabel->setText(QString("T = %1").arg(currentT, 0, 'f', 3));
+
+    // 刷新渲染窗口
+    if (overviewWidget) overviewWidget->GetRenderWindow()->Render();
+    if (endoscopeWidget) endoscopeWidget->GetRenderWindow()->Render();
 }

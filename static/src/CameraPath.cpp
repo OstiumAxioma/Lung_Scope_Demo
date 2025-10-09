@@ -466,4 +466,27 @@ namespace BronchoscopyLib {
         if (len > 1e-8) { dir[0]/=len; dir[1]/=len; dir[2]/=len; }
     }
 
+    void CameraPath::GetSplinePosDirGlobal(double t, double pos[3], double dir[3]) const {
+        if (!splineValid || splinePositions.size() < 6) {
+            // 回退：使用线性按路径长度的插值
+            GetInterpolatedPosition(t, pos);
+            GetInterpolatedDirection(t, dir);
+            return;
+        }
+        double tt = std::max(0.0, std::min(1.0, t));
+        int total = static_cast<int>(splinePositions.size() / 3);
+        double idxf = tt * (total - 1);
+        int i = static_cast<int>(std::floor(idxf));
+        double f = idxf - i;
+        if (i >= total - 1) { i = total - 2; f = 1.0; }
+        int ia = i * 3;
+        int ib = (i + 1) * 3;
+        for (int k = 0; k < 3; ++k) {
+            pos[k] = splinePositions[ia+k] + (splinePositions[ib+k] - splinePositions[ia+k]) * f;
+            dir[k] = splineTangents[ia+k] + (splineTangents[ib+k] - splineTangents[ia+k]) * f;
+        }
+        double len = std::sqrt(dir[0]*dir[0] + dir[1]*dir[1] + dir[2]*dir[2]);
+        if (len > 1e-8) { dir[0]/=len; dir[1]/=len; dir[2]/=len; }
+    }
+
 } // namespace BronchoscopyLib

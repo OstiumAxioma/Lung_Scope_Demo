@@ -22,11 +22,16 @@ namespace BronchoscopyLib {
         std::unique_ptr<CameraPath> ownedCameraPath;  // 如果内部创建则拥有
         
         // 路径可视化
+        // 概览视图：使用管道（tube）
         vtkSmartPointer<vtkActor> pathActor;
         vtkSmartPointer<vtkPolyDataMapper> pathMapper;
+        // 内窥镜视图：使用线条（polyline）
+        vtkSmartPointer<vtkActor> pathLineActor;
+        vtkSmartPointer<vtkPolyDataMapper> pathLineMapper;
         double pathColor[3];
         double pathOpacity;
         double pathTubeRadius;
+        double pathLineWidth;
         bool showPath;
         
         // 位置标记（红球）
@@ -42,7 +47,7 @@ namespace BronchoscopyLib {
         vtkRenderer* overviewRenderer;
         
         Impl() : cameraPath(nullptr), overviewWindow(nullptr), overviewRenderer(nullptr),
-                 pathOpacity(0.5), pathTubeRadius(1.0), markerRadius(2.0),
+                 pathOpacity(0.5), pathTubeRadius(1.0), pathLineWidth(2.0), markerRadius(2.0),
                  showPath(true), showMarker(true) {
             // 默认颜色
             pathColor[0] = 0.0; pathColor[1] = 1.0; pathColor[2] = 0.0;  // 绿色
@@ -52,22 +57,38 @@ namespace BronchoscopyLib {
         void CreatePathVisualization() {
             if (!cameraPath) return;
             
-            // 生成路径管道
-            vtkPolyData* pathPolyData = cameraPath->GeneratePathTube(pathTubeRadius);
-            if (!pathPolyData) return;
-            
-            // 创建mapper和actor
-            pathMapper = vtkSmartPointer<vtkPolyDataMapper>::New();
-            pathMapper->SetInputData(pathPolyData);
-            
-            pathActor = vtkSmartPointer<vtkActor>::New();
-            pathActor->SetMapper(pathMapper);
-            pathActor->GetProperty()->SetColor(pathColor);
-            pathActor->GetProperty()->SetOpacity(pathOpacity);
-            pathActor->SetVisibility(showPath);
-            
-            // 释放pathPolyData（GeneratePathTube已经增加了引用计数）
-            pathPolyData->UnRegister(nullptr);
+            // 生成路径（tube 用于概览）
+            vtkPolyData* pathTube = cameraPath->GeneratePathTube(pathTubeRadius);
+            // 生成路径（polyline 用于内窥镜）
+            vtkPolyData* pathLine = cameraPath->GeneratePathPolyData();
+            if (!pathTube && !pathLine) return;
+
+            if (pathTube) {
+                // 创建tube mapper和actor
+                pathMapper = vtkSmartPointer<vtkPolyDataMapper>::New();
+                pathMapper->SetInputData(pathTube);
+                pathActor = vtkSmartPointer<vtkActor>::New();
+                pathActor->SetMapper(pathMapper);
+                pathActor->GetProperty()->SetColor(pathColor);
+                pathActor->GetProperty()->SetOpacity(pathOpacity);
+                pathActor->SetVisibility(showPath);
+                // 释放（GeneratePathTube已增加引用计数）
+                pathTube->UnRegister(nullptr);
+            }
+
+            if (pathLine) {
+                // 创建line mapper和actor
+                pathLineMapper = vtkSmartPointer<vtkPolyDataMapper>::New();
+                pathLineMapper->SetInputData(pathLine);
+                pathLineActor = vtkSmartPointer<vtkActor>::New();
+                pathLineActor->SetMapper(pathLineMapper);
+                pathLineActor->GetProperty()->SetColor(pathColor);
+                pathLineActor->GetProperty()->SetOpacity(pathOpacity);
+                pathLineActor->GetProperty()->SetLineWidth(static_cast<float>(pathLineWidth));
+                pathLineActor->SetVisibility(showPath);
+                // 释放（GeneratePathPolyData已增加引用计数）
+                pathLine->UnRegister(nullptr);
+            }
         }
     };
     
@@ -185,7 +206,8 @@ namespace BronchoscopyLib {
     }
     
     void PathVisualization::AddPathToRenderer(vtkRenderer* renderer) {
-        if (renderer && pImpl->pathActor) {
+        if (!renderer) return;
+        if (pImpl->pathActor) {
             renderer->AddActor(pImpl->pathActor);
         }
     }
@@ -198,10 +220,16 @@ namespace BronchoscopyLib {
     }
     
     void PathVisualization::AddToRenderers(vtkRenderer* overviewRenderer, vtkRenderer* endoscopeRenderer) {
-        // 路径和标记只在overview中显示
+        // 概览：显示管道+标记
         if (overviewRenderer) {
-            AddPathToRenderer(overviewRenderer);
+            if (pImpl->pathActor) {
+                overviewRenderer->AddActor(pImpl->pathActor);
+            }
             AddMarkerToRenderer(overviewRenderer);
+        }
+        // 内窥镜：显示线条
+        if (endoscopeRenderer && pImpl->pathLineActor) {
+            endoscopeRenderer->AddActor(pImpl->pathLineActor);
         }
     }
     
@@ -214,12 +242,18 @@ namespace BronchoscopyLib {
                 overviewRenderer->RemoveActor(pImpl->markerActor);
             }
         }
+        if (endoscopeRenderer && pImpl->pathLineActor) {
+            endoscopeRenderer->RemoveActor(pImpl->pathLineActor);
+        }
     }
     
     void PathVisualization::ShowPath(bool show) {
         pImpl->showPath = show;
         if (pImpl->pathActor) {
             pImpl->pathActor->SetVisibility(show);
+        }
+        if (pImpl->pathLineActor) {
+            pImpl->pathLineActor->SetVisibility(show);
         }
     }
     
@@ -246,6 +280,9 @@ namespace BronchoscopyLib {
         if (pImpl->pathActor) {
             pImpl->pathActor->GetProperty()->SetColor(r, g, b);
         }
+        if (pImpl->pathLineActor) {
+            pImpl->pathLineActor->GetProperty()->SetColor(r, g, b);
+        }
     }
     
     void PathVisualization::SetMarkerColor(double r, double g, double b) {
@@ -263,6 +300,9 @@ namespace BronchoscopyLib {
         if (pImpl->pathActor) {
             pImpl->pathActor->GetProperty()->SetOpacity(opacity);
         }
+        if (pImpl->pathLineActor) {
+            pImpl->pathLineActor->GetProperty()->SetOpacity(opacity);
+        }
     }
     
     void PathVisualization::SetMarkerRadius(double radius) {
@@ -276,6 +316,13 @@ namespace BronchoscopyLib {
         pImpl->pathTubeRadius = radius;
         // 如果需要重新生成路径，可以在这里实现
     }
+
+    void PathVisualization::SetPathLineWidth(double width) {
+        pImpl->pathLineWidth = width;
+        if (pImpl->pathLineActor) {
+            pImpl->pathLineActor->GetProperty()->SetLineWidth(static_cast<float>(width));
+        }
+    }
     
     CameraPath* PathVisualization::GetCameraPath() const {
         return pImpl->cameraPath;
@@ -288,6 +335,8 @@ namespace BronchoscopyLib {
     void PathVisualization::ClearPath() {
         pImpl->pathActor = nullptr;
         pImpl->pathMapper = nullptr;
+        pImpl->pathLineActor = nullptr;
+        pImpl->pathLineMapper = nullptr;
         pImpl->ownedCameraPath.reset();
         if (pImpl->cameraPath == pImpl->ownedCameraPath.get()) {
             pImpl->cameraPath = nullptr;
