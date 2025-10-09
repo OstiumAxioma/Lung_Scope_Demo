@@ -149,6 +149,10 @@ namespace BronchoscopyLib {
         // 设置并拥有这个路径
         pImpl->cameraPath = path.get();
         pImpl->ownedCameraPath = std::move(path);
+        // 预计算样条以用于平滑可视化与动画
+        if (pImpl->cameraPath) {
+            pImpl->cameraPath->GenerateSpline(50);
+        }
         
         // 创建路径可视化
         pImpl->CreatePathVisualization();

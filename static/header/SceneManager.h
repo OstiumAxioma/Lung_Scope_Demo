@@ -38,6 +38,8 @@ namespace BronchoscopyLib {
         // 场景更新
         void UpdateScene();
         void UpdateFromNavigation(PathNode* node, int index);
+        // 动画更新（推进样条过渡），返回是否仍在动画中
+        bool UpdateAnimation();
         
         // 场景清理
         void ClearScene();

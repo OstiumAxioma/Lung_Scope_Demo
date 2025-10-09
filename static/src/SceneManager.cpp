@@ -8,6 +8,9 @@
 
 #include <vtkPolyData.h>
 #include <iostream>
+#include <algorithm>
+#include <chrono>
+#include <cmath>
 
 namespace BronchoscopyLib {
     
@@ -25,6 +28,14 @@ namespace BronchoscopyLib {
         bool showMarker;
         bool autoRender;
         bool sceneInitialized;
+
+        // 样条动画状态
+        bool splineAnimating = false;
+        int lastNavIndex = -1;
+        int splineSegmentIndex = -1; // 当前段索引
+        bool splineReverse = false;
+        double splineDuration = 0.6; // 每段基本时长
+        std::chrono::steady_clock::time_point splineStartTime;
         
         Impl() : cameraController(nullptr), modelManager(nullptr),
                  pathVisualization(nullptr), renderingEngine(nullptr),
@@ -42,6 +53,12 @@ namespace BronchoscopyLib {
             if (autoRender && renderingEngine) {
                 renderingEngine->Render();
             }
+        }
+
+        static double EaseInOutCubic(double t) {
+            if (t < 0.5) return 4.0 * t * t * t;
+            double p = 2.0 * t - 2.0;
+            return 1.0 + (p * p * p) / 2.0;
         }
     };
     
@@ -117,11 +134,13 @@ namespace BronchoscopyLib {
         
         // 更新场景组件
         if (pImpl->navigationController) {
-            PathNode* currentNode = pImpl->navigationController->GetCurrentNode();
-            int currentIndex = pImpl->navigationController->GetCurrentIndex();
-            
-            if (currentNode) {
-                UpdateFromNavigation(currentNode, currentIndex);
+            // 若当前存在样条动画，则不强制设置为节点位置
+            if (!pImpl->splineAnimating) {
+                PathNode* currentNode = pImpl->navigationController->GetCurrentNode();
+                int currentIndex = pImpl->navigationController->GetCurrentIndex();
+                if (currentNode) {
+                    UpdateFromNavigation(currentNode, currentIndex);
+                }
             }
         }
         
@@ -272,6 +291,9 @@ namespace BronchoscopyLib {
         if (pImpl->navigationController) {
             CameraPath* path = pImpl->pathVisualization->GetCameraPath();
             pImpl->navigationController->SetCameraPath(path);
+            // 重置动画状态
+            pImpl->splineAnimating = false;
+            pImpl->lastNavIndex = pImpl->navigationController->GetCurrentIndex();
         }
         
         // 更新场景
@@ -281,8 +303,77 @@ namespace BronchoscopyLib {
     }
     
     void SceneManager::OnNavigationChanged(PathNode* node, int index) {
-        UpdateFromNavigation(node, index);
+        // 若无路径或节点，直接返回
+        if (!pImpl->pathVisualization || !pImpl->pathVisualization->GetCameraPath() || !node) {
+            UpdateFromNavigation(node, index);
+            pImpl->TriggerRender();
+            return;
+        }
+
+        CameraPath* path = pImpl->pathVisualization->GetCameraPath();
+        int prevIndex = pImpl->lastNavIndex;
+        pImpl->lastNavIndex = index;
+
+        // 计算段索引与方向
+        int segments = path->GetSegmentCount();
+        int segIdx = -1;
+        bool reverse = false;
+        if (prevIndex >= 0 && index >= 0) {
+            if (index == prevIndex + 1) { // next
+                segIdx = std::max(0, index - 1);
+                reverse = false;
+            } else if (index == prevIndex - 1) { // previous
+                segIdx = std::min(segments - 1, index);
+                segIdx = std::max(0, segIdx);
+                reverse = true;
+            }
+        }
+
+        if (segIdx < 0 || segments <= 0) {
+            // 无法确定段，直接跳转
+            UpdateFromNavigation(node, index);
+            pImpl->TriggerRender();
+            return;
+        }
+
+        // 基于段长度设置时长
+        double a[3], b[3], tmp[3];
+        path->GetSplinePosDirBetween(segIdx, 0.0, a, tmp);
+        path->GetSplinePosDirBetween(segIdx, 1.0, b, tmp);
+        double d = std::sqrt((b[0]-a[0])*(b[0]-a[0]) + (b[1]-a[1])*(b[1]-a[1]) + (b[2]-a[2])*(b[2]-a[2]));
+        double base = 0.4, scale = 0.01;
+        pImpl->splineDuration = std::min(1.5, std::max(0.2, base + d * scale));
+
+        pImpl->splineSegmentIndex = segIdx;
+        pImpl->splineReverse = reverse;
+        pImpl->splineAnimating = true;
+        pImpl->splineStartTime = std::chrono::steady_clock::now();
+        // 首帧立即更新一次
+        UpdateAnimation();
+    }
+
+    bool SceneManager::UpdateAnimation() {
+        if (!pImpl->splineAnimating) return false;
+        CameraPath* path = pImpl->pathVisualization ? pImpl->pathVisualization->GetCameraPath() : nullptr;
+        if (!path) { pImpl->splineAnimating = false; return false; }
+
+        auto now = std::chrono::steady_clock::now();
+        std::chrono::duration<double> elapsed = now - pImpl->splineStartTime;
+        double t = elapsed.count() / pImpl->splineDuration;
+        if (t >= 1.0) { t = 1.0; pImpl->splineAnimating = false; }
+        double eased = Impl::EaseInOutCubic(std::max(0.0, std::min(1.0, t)));
+        if (pImpl->splineReverse) eased = 1.0 - eased;
+
+        double pos[3], dir[3];
+        path->GetSplinePosDirBetween(pImpl->splineSegmentIndex, eased, pos, dir);
+        if (pImpl->cameraController) {
+            pImpl->cameraController->UpdateEndoscopeCamera(pos, dir);
+        }
+        if (pImpl->pathVisualization && pImpl->showMarker) {
+            pImpl->pathVisualization->UpdatePositionMarker(pos);
+        }
         pImpl->TriggerRender();
+        return pImpl->splineAnimating;
     }
     
     void SceneManager::RequestRender() {

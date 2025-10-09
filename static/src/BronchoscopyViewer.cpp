@@ -29,6 +29,8 @@
 #include <vtkTransformPolyDataFilter.h>
 
 #include <iostream>
+#include <cmath>
+#include <chrono>
 
 namespace BronchoscopyLib {
 
@@ -62,7 +64,14 @@ namespace BronchoscopyLib {
         bool showMarker;
         bool isPlaying;
         double playSpeed;
-        
+
+        // 样条动画状态
+        bool splineAnimating = false;
+        int splineSegmentIndex = -1;    // 当前动画段索引
+        bool splineReverse = false;     // 是否反向（prev）
+        double splineDuration = 0.6;    // 默认每段动画时长（秒）
+        std::chrono::steady_clock::time_point splineStartTime;
+
         Impl() : cameraPath(nullptr), showPath(true), showMarker(true), 
                  isPlaying(false), playSpeed(1.0) {
             // 创建渲染器
@@ -81,6 +90,13 @@ namespace BronchoscopyLib {
             // 设置背景
             overviewRenderer->SetBackground(0.1, 0.1, 0.2);  // 深蓝色
             endoscopeRenderer->SetBackground(0.0, 0.0, 0.0);  // 黑色
+        }
+
+        // 简单缓动函数，平滑加减速
+        static double EaseInOutCubic(double t) {
+            if (t < 0.5) return 4.0 * t * t * t;
+            double p = 2.0 * t - 2.0;
+            return 1.0 + (p * p * p) / 2.0;
         }
         
         void UpdateEndoscopeCamera() {
@@ -279,6 +295,8 @@ namespace BronchoscopyLib {
         if (!path || path->GetTotalNodes() == 0) return false;
         
         pImpl->cameraPath = path;
+        // 预生成样条（Catmull-Rom）
+        pImpl->cameraPath->GenerateSpline(50);
         
         // 生成路径可视化
         vtkPolyData* pathPolyData = path->GeneratePathTube(1.0);
@@ -339,16 +357,29 @@ namespace BronchoscopyLib {
         if (!pImpl->cameraPath) return;
         
         // 如果正在动画中，跳过
-        if (pImpl->cameraController->IsTransitioning()) {
+        if (pImpl->cameraController->IsTransitioning() || pImpl->splineAnimating) {
             return;
         }
         
         // 获取下一个节点
         if (pImpl->cameraPath->MoveNext()) {
-            PathNode* nextNode = pImpl->cameraPath->GetCurrent();
-            
-            // 通过CameraController启动动画过渡
-            pImpl->cameraController->StartTransition(nextNode);
+            // 使用样条段进行动画：段索引为当前索引-1
+            int curIdx = pImpl->cameraPath->GetCurrentIndex();
+            int segIdx = std::max(0, curIdx - 1);
+            pImpl->splineSegmentIndex = segIdx;
+            pImpl->splineReverse = false;
+
+            // 基于段长度估计动画时长（使用节点间距离）
+            double p1[3], p2[3], tmpDir[3];
+            pImpl->cameraPath->GetSplinePosDirBetween(segIdx, 0.0, p1, tmpDir);
+            pImpl->cameraPath->GetSplinePosDirBetween(segIdx, 1.0, p2, tmpDir);
+            double d = std::sqrt((p2[0]-p1[0])*(p2[0]-p1[0]) + (p2[1]-p1[1])*(p2[1]-p1[1]) + (p2[2]-p1[2])*(p2[2]-p1[2]));
+            double base = 0.4; // 基础时间
+            double scale = 0.01; // 距离权重
+            pImpl->splineDuration = std::min(1.5, std::max(0.2, base + d * scale));
+
+            pImpl->splineAnimating = true;
+            pImpl->splineStartTime = std::chrono::steady_clock::now();
         }
     }
 
@@ -356,16 +387,29 @@ namespace BronchoscopyLib {
         if (!pImpl->cameraPath) return;
         
         // 如果正在动画中，跳过
-        if (pImpl->cameraController->IsTransitioning()) {
+        if (pImpl->cameraController->IsTransitioning() || pImpl->splineAnimating) {
             return;
         }
         
         // 获取前一个节点
         if (pImpl->cameraPath->MovePrevious()) {
-            PathNode* prevNode = pImpl->cameraPath->GetCurrent();
-            
-            // 通过CameraController启动动画过渡
-            pImpl->cameraController->StartTransition(prevNode);
+            // 前一个：段索引为当前索引（从当前到下一个，反向播放）
+            int curIdx = pImpl->cameraPath->GetCurrentIndex();
+            int segIdx = std::min(pImpl->cameraPath->GetSegmentCount()-1, curIdx);
+            segIdx = std::max(0, segIdx);
+            pImpl->splineSegmentIndex = segIdx;
+            pImpl->splineReverse = true;
+
+            double p1[3], p2[3], tmpDir2[3];
+            pImpl->cameraPath->GetSplinePosDirBetween(segIdx, 0.0, p1, tmpDir2);
+            pImpl->cameraPath->GetSplinePosDirBetween(segIdx, 1.0, p2, tmpDir2);
+            double d = std::sqrt((p2[0]-p1[0])*(p2[0]-p1[0]) + (p2[1]-p1[1])*(p2[1]-p1[1]) + (p2[2]-p1[2])*(p2[2]-p1[2]));
+            double base = 0.4;
+            double scale = 0.01;
+            pImpl->splineDuration = std::min(1.5, std::max(0.2, base + d * scale));
+
+            pImpl->splineAnimating = true;
+            pImpl->splineStartTime = std::chrono::steady_clock::now();
         }
     }
 
@@ -405,19 +449,39 @@ namespace BronchoscopyLib {
     }
     
     bool BronchoscopyViewer::UpdateAnimation() {
-        bool isAnimating = pImpl->cameraController->UpdateTransition();
-        
-        // 如果动画正在进行，更新标记位置
-        if (isAnimating) {
-            PathNode currentState;
-            pImpl->cameraController->GetCurrentEndoscopeState(&currentState);
-            pImpl->UpdatePositionMarkerWithPos(currentState.position);
-            
+        bool isAnimating = false;
+
+        // 优先处理样条动画
+        if (pImpl->splineAnimating && pImpl->cameraPath) {
+            auto now = std::chrono::steady_clock::now();
+            std::chrono::duration<double> elapsed = now - pImpl->splineStartTime;
+            double t = elapsed.count() / pImpl->splineDuration;
+            if (t >= 1.0) { t = 1.0; pImpl->splineAnimating = false; }
+            double eased = Impl::EaseInOutCubic(std::max(0.0, std::min(1.0, t)));
+            if (pImpl->splineReverse) eased = 1.0 - eased;
+
+            double pos[3], dir[3];
+            pImpl->cameraPath->GetSplinePosDirBetween(pImpl->splineSegmentIndex, eased, pos, dir);
+            pImpl->cameraController->UpdateEndoscopeCamera(pos, dir);
+            pImpl->UpdatePositionMarkerWithPos(pos);
+
             // 触发渲染
             if (pImpl->overviewWindow) pImpl->overviewWindow->Render();
             if (pImpl->endoscopeWindow) pImpl->endoscopeWindow->Render();
+
+            isAnimating = pImpl->splineAnimating;
+        } else {
+            // 回退到相机控制器内部动画
+            isAnimating = pImpl->cameraController->UpdateTransition();
+            if (isAnimating) {
+                PathNode currentState;
+                pImpl->cameraController->GetCurrentEndoscopeState(&currentState);
+                pImpl->UpdatePositionMarkerWithPos(currentState.position);
+                if (pImpl->overviewWindow) pImpl->overviewWindow->Render();
+                if (pImpl->endoscopeWindow) pImpl->endoscopeWindow->Render();
+            }
         }
-        
+
         return isAnimating;
     }
     

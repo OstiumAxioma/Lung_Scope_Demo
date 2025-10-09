@@ -107,22 +107,14 @@ namespace BronchoscopyLib {
     
     void BronchoscopyAPI::MoveToNext() {
         if (pImpl->navigationController->MoveToNext()) {
-            // 获取目标节点并启动动画过渡
-            PathNode* targetNode = pImpl->navigationController->GetCurrentNode();
-            if (targetNode) {
-                pImpl->cameraController->StartTransition(targetNode);
-            }
+            // SceneManager的导航回调将启动样条动画
             pImpl->UpdateViews();
         }
     }
     
     void BronchoscopyAPI::MoveToPrevious() {
         if (pImpl->navigationController->MoveToPrevious()) {
-            // 获取目标节点并启动动画过渡
-            PathNode* targetNode = pImpl->navigationController->GetCurrentNode();
-            if (targetNode) {
-                pImpl->cameraController->StartTransition(targetNode);
-            }
+            // SceneManager的导航回调将启动样条动画
             pImpl->UpdateViews();
         }
     }
@@ -313,14 +305,11 @@ namespace BronchoscopyLib {
     
     // Animation control
     bool BronchoscopyAPI::UpdateAnimation() {
-        // 更新相机动画过渡
-        bool isAnimating = pImpl->cameraController->UpdateTransition();
-        
-        // 如果正在动画，更新场景
+        // 由SceneManager推进样条动画
+        bool isAnimating = pImpl->sceneManager->UpdateAnimation();
         if (isAnimating) {
             pImpl->UpdateViews();
         }
-        
         return isAnimating;
     }
     
