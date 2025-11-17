@@ -154,10 +154,15 @@ echo.
 set /p run="Do you want to run the application now? (y/n): "
 if /i "%run%"=="y" (
     echo.
-    echo Setting VTK DLL path and running application...
+    echo Setting VTK/Qt DLL path and running application...
     
-    REM 添加VTK的bin目录到PATH
-    set "PATH=%PATH%;D:\code\vtk8.2.0\VTK-8.2.0\bin"
+    REM 添加VTK的bin目录到PATH（请根据实际VTK9.4路径调整）
+    set "PATH=%PATH%;D:\Compile\VTK9.4.2\bin"
+    
+    REM 如果通过第一个参数传入了Qt路径，则把其bin目录也加入PATH
+    if not "%~1"=="" (
+        set "PATH=%PATH%;%~1\bin"
+    )
     
     REM 根据编译的版本运行
     if %BUILD_RELEASE%==1 if exist "build\Exe\Release\VTK_Qt_Project.exe" (

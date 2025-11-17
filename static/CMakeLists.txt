@@ -19,44 +19,15 @@ if(MSVC)
     add_compile_options("/source-charset:utf-8")
 endif()
 
-# Qt5配置 - 自动查找或使用环境变量
-if(NOT DEFINED Qt5_DIR)
-    # 尝试常见的Qt安装路径
-    set(Qt5_PATHS
-        "C:/Qt/Qt5.14.2/5.14.2/msvc2017_64"
-        "C:/Qt/5.14.2/msvc2017_64"
-        "C:/Qt5/5.14.2/msvc2017_64"
-        "D:/Qt/Qt5.14.2/5.14.2/msvc2017_64"
-        "D:/Qt/5.14.2/msvc2017_64"
-        "$ENV{Qt5_DIR}"
-        "$ENV{QT_DIR}"
-        "$ENV{QTDIR}"
-    )
-    
-    foreach(path ${Qt5_PATHS})
-        if(EXISTS "${path}/lib/cmake/Qt5")
-            set(Qt5_DIR "${path}/lib/cmake/Qt5")
-            message(STATUS "Found Qt5 at: ${Qt5_DIR}")
-            break()
-        endif()
-    endforeach()
-endif()
-
-# 如果还是找不到Qt5，提示用户设置
-if(NOT DEFINED Qt5_DIR)
-    message(WARNING "Qt5 not found automatically. Please set Qt5_DIR or CMAKE_PREFIX_PATH")
-    message(WARNING "You can set it by: cmake -DQt5_DIR=<path_to_qt5>/lib/cmake/Qt5")
-endif()
-
 # VTK配置 - 自动查找或使用环境变量
 if(NOT DEFINED VTK_DIR)
-    # 尝试常见的VTK安装路径
+    # 首选用户指定的 VTK 9.4.2 路径
     set(VTK_PATHS
-        "D:/code/vtk8.2.0/VTK-8.2.0/lib/cmake/vtk-8.2"
-        "C:/VTK/lib/cmake/vtk-8.2"
-        "C:/Program Files/VTK/lib/cmake/vtk-8.2"
+        "D:/Compile/VTK9.4.2/lib/cmake/vtk-9.4"
+        "C:/VTK/lib/cmake/vtk-9.4"
+        "C:/Program Files/VTK/lib/cmake/vtk-9.4"
         "$ENV{VTK_DIR}"
-        "$ENV{VTK_ROOT}/lib/cmake/vtk-8.2"
+        "$ENV{VTK_ROOT}/lib/cmake/vtk-9.4"
     )
     
     foreach(path ${VTK_PATHS})
@@ -71,13 +42,10 @@ endif()
 # 如果还是找不到VTK，提示用户设置
 if(NOT DEFINED VTK_DIR)
     message(FATAL_ERROR "VTK not found. Please set VTK_DIR or install VTK\n"
-                        "You can set it by: cmake -DVTK_DIR=<path_to_vtk>/lib/cmake/vtk-8.2")
+                        "You can set it by: cmake -DVTK_DIR=<path_to_vtk>/lib/cmake/vtk-9.4")
 endif()
 
-find_package(VTK 8.2 REQUIRED)
-
-# 包含VTK使用文件（VTK 8.2必需）
-include(${VTK_USE_FILE})
+find_package(VTK 9.4 REQUIRED)
 
 # 设置输出目录
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)

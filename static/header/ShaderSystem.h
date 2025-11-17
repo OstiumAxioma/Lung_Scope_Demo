@@ -5,9 +5,7 @@
 #include <vector>
 #include <memory>
 
-// 前向声明VTK类
 class vtkActor;
-class vtkOpenGLPolyDataMapper;
 class vtkRenderer;
 
 namespace BronchoscopyLib {
@@ -75,14 +73,8 @@ namespace BronchoscopyLib {
         // 应用shader组合到actor
         bool ApplyShader(vtkActor* actor, const ShaderConfig& config);
         
-        // 应用shader到mapper（更底层的接口）
-        bool ApplyShaderToMapper(vtkOpenGLPolyDataMapper* mapper, 
-                                 const ShaderConfig& config);
-        
         // 应用材质shader
         bool ApplyMaterialShader(vtkActor* actor, MaterialShader material);
-        bool ApplyMaterialShaderToMapper(vtkOpenGLPolyDataMapper* mapper, 
-                                         MaterialShader material);
         
         // 应用后处理到渲染器
         bool ApplyPostProcessing(vtkRenderer* renderer, PostShader postEffect);

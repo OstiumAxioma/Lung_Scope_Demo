@@ -11,7 +11,7 @@
 #include <QTimer>
 #include <QLabel>
 #include <QSlider>
-#include <QVTKOpenGLWidget.h>
+#include <QVTKOpenGLNativeWidget.h>
 #include <QKeyEvent>
 #include <QDebug>
 
@@ -168,12 +168,12 @@ void MainWindow::createStatusBar()
 void MainWindow::setupDualViewWidget()
 {
     // 创建两个VTK窗口
-    overviewWidget = new QVTKOpenGLWidget(this);
-    endoscopeWidget = new QVTKOpenGLWidget(this);
+    overviewWidget = new QVTKOpenGLNativeWidget(this);
+    endoscopeWidget = new QVTKOpenGLNativeWidget(this);
     
     // 强制初始化OpenGL上下文
-    overviewWidget->SetRenderWindow(vtkSmartPointer<vtkGenericOpenGLRenderWindow>::New());
-    endoscopeWidget->SetRenderWindow(vtkSmartPointer<vtkGenericOpenGLRenderWindow>::New());
+    overviewWidget->setRenderWindow(vtkSmartPointer<vtkGenericOpenGLRenderWindow>::New());
+    endoscopeWidget->setRenderWindow(vtkSmartPointer<vtkGenericOpenGLRenderWindow>::New());
     
     // 创建分割器
     QSplitter *splitter = new QSplitter(Qt::Horizontal);
@@ -211,21 +211,21 @@ void MainWindow::setupDualViewWidget()
     setCentralWidget(splitter);
     
     // 连接渲染窗口到API
-    bronchoscopyAPI->SetOverviewRenderWindow(overviewWidget->GetRenderWindow());
-    bronchoscopyAPI->SetEndoscopeRenderWindow(endoscopeWidget->GetRenderWindow());
+    bronchoscopyAPI->SetOverviewRenderWindow(overviewWidget->renderWindow());
+    bronchoscopyAPI->SetEndoscopeRenderWindow(endoscopeWidget->renderWindow());
     
     // 调试：确保渲染窗口和交互器正确连接
-    qDebug() << "Overview RenderWindow:" << overviewWidget->GetRenderWindow();
-    qDebug() << "Overview Interactor:" << overviewWidget->GetInteractor();
-    qDebug() << "Endoscope RenderWindow:" << endoscopeWidget->GetRenderWindow();
-    qDebug() << "Endoscope Interactor:" << endoscopeWidget->GetInteractor();
+    qDebug() << "Overview RenderWindow:" << overviewWidget->renderWindow();
+    qDebug() << "Overview Interactor:" << overviewWidget->interactor();
+    qDebug() << "Endoscope RenderWindow:" << endoscopeWidget->renderWindow();
+    qDebug() << "Endoscope Interactor:" << endoscopeWidget->interactor();
     
     // 确保交互器已初始化
-    if (overviewWidget->GetInteractor()) {
-        overviewWidget->GetInteractor()->Initialize();
+    if (overviewWidget->interactor()) {
+        overviewWidget->interactor()->Initialize();
     }
-    if (endoscopeWidget->GetInteractor()) {
-        endoscopeWidget->GetInteractor()->Initialize();
+    if (endoscopeWidget->interactor()) {
+        endoscopeWidget->interactor()->Initialize();
     }
     
     // 初始渲染
@@ -271,8 +271,12 @@ void MainWindow::loadAirwayModel()
         statusLabel->setText("模型已加载");
         
         // 强制刷新两个视图
-        overviewWidget->GetRenderWindow()->Render();
-        endoscopeWidget->GetRenderWindow()->Render();
+        if (overviewWidget->renderWindow()) {
+            overviewWidget->renderWindow()->Render();
+        }
+        if (endoscopeWidget->renderWindow()) {
+            endoscopeWidget->renderWindow()->Render();
+        }
         
         qDebug() << "Forced render after loading model";
     } else {
@@ -341,7 +345,9 @@ void MainWindow::loadCameraPath()
         }
         
         // 强制刷新endoscope视图（相机位置已更新）
-        endoscopeWidget->GetRenderWindow()->Render();
+        if (endoscopeWidget->renderWindow()) {
+            endoscopeWidget->renderWindow()->Render();
+        }
         qDebug() << "Forced render after loading path";
     } else {
         QMessageBox::warning(this, "加载失败", "无法加载路径文件，请检查文件格式\n需要至少2个点");
@@ -379,11 +385,11 @@ void MainWindow::updateAnimation()
     bool stillAnimating = bronchoscopyAPI->UpdateAnimation();
     
     // 刷新渲染窗口
-    if (overviewWidget) {
-        overviewWidget->GetRenderWindow()->Render();
+    if (overviewWidget && overviewWidget->renderWindow()) {
+        overviewWidget->renderWindow()->Render();
     }
-    if (endoscopeWidget) {
-        endoscopeWidget->GetRenderWindow()->Render();
+    if (endoscopeWidget && endoscopeWidget->renderWindow()) {
+        endoscopeWidget->renderWindow()->Render();
     }
     
     // 如果动画结束，停止定时器
@@ -407,6 +413,10 @@ void MainWindow::onSplineSliderChanged(int value)
     statusLabel->setText(QString("T = %1").arg(currentT, 0, 'f', 3));
 
     // 刷新渲染窗口
-    if (overviewWidget) overviewWidget->GetRenderWindow()->Render();
-    if (endoscopeWidget) endoscopeWidget->GetRenderWindow()->Render();
+    if (overviewWidget && overviewWidget->renderWindow()) {
+        overviewWidget->renderWindow()->Render();
+    }
+    if (endoscopeWidget && endoscopeWidget->renderWindow()) {
+        endoscopeWidget->renderWindow()->Render();
+    }
 }

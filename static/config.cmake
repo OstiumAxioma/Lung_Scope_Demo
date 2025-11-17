@@ -9,14 +9,10 @@
 #
 # ================================================================
 
-# Qt5路径配置
-# 取消下面的注释并设置为你的Qt5路径
-# set(Qt5_DIR "C:/Qt/Qt5.14.2/5.14.2/msvc2017_64/lib/cmake/Qt5")
+# Qt5路径配置（默认使用 Qt 5.14.2 MSVC2017_64）
+set(Qt5_DIR "C:/Qt/Qt5.14.2/5.14.2/msvc2017_64/lib/cmake/Qt5")
 
-# VTK路径配置
-# 取消下面的注释并设置为你的VTK路径
-# set(VTK_DIR "D:/code/vtk8.2.0/VTK-8.2.0/lib/cmake/vtk-8.2")
+# VTK路径配置（默认使用 VTK 9.4.2）
+set(VTK_DIR "D:/Compile/VTK9.4.2/lib/cmake/vtk-9.4")
 
-# 或者使用CMAKE_PREFIX_PATH来指定搜索路径
-# list(APPEND CMAKE_PREFIX_PATH "C:/Qt/Qt5.14.2/5.14.2/msvc2017_64")
-# list(APPEND CMAKE_PREFIX_PATH "D:/code/vtk8.2.0/VTK-8.2.0")
+# 如需追加其它搜索路径，可在本地 config.local.cmake 中扩展 CMAKE_PREFIX_PATH

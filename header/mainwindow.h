@@ -21,7 +21,7 @@ class QLabel;
 class QTimer;
 QT_END_NAMESPACE
 
-class QVTKOpenGLWidget;
+class QVTKOpenGLNativeWidget;
 
 // 前向声明
 namespace BronchoscopyLib {
@@ -53,8 +53,8 @@ protected:
 
 private:
     // UI组件 - 双窗口
-    QVTKOpenGLWidget *overviewWidget;   // 左侧：全局视图
-    QVTKOpenGLWidget *endoscopeWidget;  // 右侧：内窥镜视图
+    QVTKOpenGLNativeWidget *overviewWidget;   // 左侧：全局视图
+    QVTKOpenGLNativeWidget *endoscopeWidget;  // 右侧：内窥镜视图
     
     // 菜单和工具栏
     QMenu *fileMenu;

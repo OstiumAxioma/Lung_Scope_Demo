@@ -7,6 +7,7 @@
 #include <vtkPolyDataMapper.h>
 #include <vtkProperty.h>
 #include <vtkShader.h>
+#include <vtkShaderProperty.h>
 
 // Standard headers
 #include <iostream>
@@ -254,21 +255,17 @@ namespace BronchoscopyLib {
             return false;
         }
         
-        return ApplyShaderToMapper(glMapper, config);
-    }
-    
-    bool ShaderSystem::ApplyShaderToMapper(vtkOpenGLPolyDataMapper* mapper, 
-                                          const ShaderConfig& config) {
-        if (!mapper) {
-            return false;
-        }
-        
         if (!pImpl->initialized) {
             Initialize();
         }
         
-        // 清除之前的shader替换
-        mapper->ClearAllShaderReplacements();
+        // 使用 actor 的 ShaderProperty 在 VTK 9 中进行替换
+        vtkShaderProperty* shaderProperty = actor->GetShaderProperty();
+        if (!shaderProperty) {
+            std::cerr << "ShaderSystem: Actor has no shader property" << std::endl;
+            return false;
+        }
+        shaderProperty->ClearAllShaderReplacements();
         
         // 获取shader文件路径（顶点和片段分开）
         auto shaderPaths = pImpl->GetViewShaderPaths(config.view);
@@ -295,8 +292,7 @@ namespace BronchoscopyLib {
             // 应用顶点shader替换
             for (auto& replacement : vertReplacements) {
                 replacement.shaderType = vtkShader::Vertex;  // 设置为顶点shader
-                mapper->AddShaderReplacement(
-                    replacement.shaderType,
+                shaderProperty->AddVertexShaderReplacement(
                     replacement.tag.c_str(),
                     replacement.before,
                     replacement.code.c_str(),
@@ -322,8 +318,7 @@ namespace BronchoscopyLib {
             // 应用片段shader替换
             for (auto& replacement : fragReplacements) {
                 replacement.shaderType = vtkShader::Fragment;  // 设置为片段shader
-                mapper->AddShaderReplacement(
-                    replacement.shaderType,
+                shaderProperty->AddFragmentShaderReplacement(
                     replacement.tag.c_str(),
                     replacement.before,
                     replacement.code.c_str(),
@@ -353,25 +348,15 @@ namespace BronchoscopyLib {
             return false;
         }
         
-        vtkOpenGLPolyDataMapper* glMapper = 
-            vtkOpenGLPolyDataMapper::SafeDownCast(mapper);
-        
-        if (!glMapper) {
-            std::cerr << "ShaderSystem: Mapper is not OpenGL poly data mapper" << std::endl;
-            return false;
-        }
-        
-        return ApplyMaterialShaderToMapper(glMapper, material);
-    }
-    
-    bool ShaderSystem::ApplyMaterialShaderToMapper(vtkOpenGLPolyDataMapper* mapper, 
-                                                   MaterialShader material) {
-        if (!mapper) {
-            return false;
-        }
-        
         if (!pImpl->initialized) {
             Initialize();
+        }
+        
+        // 使用 actor 的 ShaderProperty 应用材质替换
+        vtkShaderProperty* shaderProperty = actor->GetShaderProperty();
+        if (!shaderProperty) {
+            std::cerr << "ShaderSystem: Actor has no shader property" << std::endl;
+            return false;
         }
         
         // 不清除之前的替换，因为材质和视图shader是叠加的
@@ -401,8 +386,7 @@ namespace BronchoscopyLib {
             
             for (auto& replacement : vertReplacements) {
                 replacement.shaderType = vtkShader::Vertex;
-                mapper->AddShaderReplacement(
-                    replacement.shaderType,
+                shaderProperty->AddVertexShaderReplacement(
                     replacement.tag.c_str(),
                     replacement.before,
                     replacement.code.c_str(),
@@ -427,8 +411,7 @@ namespace BronchoscopyLib {
             
             for (auto& replacement : fragReplacements) {
                 replacement.shaderType = vtkShader::Fragment;
-                mapper->AddShaderReplacement(
-                    replacement.shaderType,
+                shaderProperty->AddFragmentShaderReplacement(
                     replacement.tag.c_str(),
                     replacement.before,
                     replacement.code.c_str(),
