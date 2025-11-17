@@ -69,6 +69,12 @@ namespace BronchoscopyLib {
         void GetSplinePosDirBetween(int segmentIndex, double u, double pos[3], double dir[3]) const;
         // 按全局参数t∈[0,1]获取样条位置与方向
         void GetSplinePosDirGlobal(double t, double pos[3], double dir[3]) const;
+        // 确保样条采样有效（必要时重新生成）
+        bool EnsureSpline(int samplesPerSegment);
+        // 样条总长度（毫米）
+        double GetSplineTotalLength() const;
+        // 按弧长（毫米）获取样条位置和方向
+        bool GetSplinePosDirByDistance(double distance, double pos[3], double dir[3]) const;
         
     private:
         PathNode* head;
@@ -86,6 +92,8 @@ namespace BronchoscopyLib {
         // 扁平化存储：positions和tangents均为(x,y,z)顺序排列
         std::vector<double> splinePositions;   // size = 3 * totalSamples
         std::vector<double> splineTangents;    // size = 3 * totalSamples
+        std::vector<double> splineArcLengths;  // size = totalSamples
+        double totalSplineLength = 0.0;
         // 每个段的起始样本在扁平数组中的索引（按样本编号，而非三元组索引）
         // 大小为 GetSegmentCount()+1，最后一个元素是总样本数
         std::vector<int> segmentSampleOffsets;

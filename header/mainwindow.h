@@ -7,6 +7,7 @@ VTK_MODULE_INIT(vtkRenderingOpenGL2)
 VTK_MODULE_INIT(vtkInteractionStyle)
 
 #include <QMainWindow>
+#include <QString>
 #include <memory>
 #include <QKeyEvent>
 class QSlider;
@@ -47,6 +48,7 @@ private slots:
     void resetNavigation();
     void updateAnimation();  // 更新动画帧
     void onSplineSliderChanged(int value);
+    void generateDataset();
 
 protected:
     void keyPressEvent(QKeyEvent *event) override;
@@ -71,6 +73,7 @@ private:
     QAction *exitAct;
     QAction *aboutAct;
     QAction *resetAct;
+    QAction *generateDataAct;
     
     // 状态标签
     QLabel *statusLabel;
@@ -82,6 +85,14 @@ private:
     QTimer *animationTimer;     // 动画更新定时器
     bool isAnimating;           // 是否正在动画过渡中
     double currentT = 0.0;      // 样条全局参数（0..1）
+
+    // 数据集生成配置
+    QString datasetPathId = "01";
+    double datasetStepMm = 2.0;
+    double datasetRollRangeDeg = 11.0;
+
+    QString ensureResultDirectory() const;
+    void updateActionStates();
 };
 
 #endif // MAINWINDOW_H

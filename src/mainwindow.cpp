@@ -14,6 +14,16 @@
 #include <QVTKOpenGLWidget.h>
 #include <QKeyEvent>
 #include <QDebug>
+#include <QDir>
+#include <QFile>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QRandomGenerator>
+#include <QCoreApplication>
+#include <QInputDialog>
+#include <QLineEdit>
+#include <QSignalBlocker>
 
 // 包含静态库头文件
 #include "BronchoscopyAPI.h"
@@ -30,6 +40,7 @@
 
 #include <fstream>
 #include <sstream>
+#include <algorithm>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -57,6 +68,8 @@ MainWindow::MainWindow(QWidget *parent)
     animationTimer = new QTimer(this);
     animationTimer->setInterval(16);  // 约60FPS
     connect(animationTimer, &QTimer::timeout, this, &MainWindow::updateAnimation);
+
+    updateActionStates();
 }
 
 MainWindow::~MainWindow()
@@ -75,6 +88,11 @@ void MainWindow::createActions()
     loadPathAct->setShortcut(QKeySequence("Ctrl+P"));
     loadPathAct->setStatusTip("加载相机路径文件 (.txt, .csv)");
     connect(loadPathAct, &QAction::triggered, this, &MainWindow::loadCameraPath);
+
+    generateDataAct = new QAction("生成训练数据(&G)", this);
+    generateDataAct->setStatusTip("沿当前路径批量生成256x256 PNG与位姿JSON");
+    generateDataAct->setEnabled(false);
+    connect(generateDataAct, &QAction::triggered, this, &MainWindow::generateDataset);
     
     exitAct = new QAction("退出(&Q)", this);
     exitAct->setShortcuts(QKeySequence::Quit);
@@ -110,6 +128,7 @@ void MainWindow::createMenus()
     fileMenu = menuBar()->addMenu("文件(&F)");
     fileMenu->addAction(loadModelAct);
     fileMenu->addAction(loadPathAct);
+    fileMenu->addAction(generateDataAct);
     fileMenu->addSeparator();
     fileMenu->addAction(exitAct);
     
@@ -144,6 +163,7 @@ void MainWindow::createToolBars()
     fileToolBar = addToolBar("文件");
     fileToolBar->addAction(loadModelAct);
     fileToolBar->addAction(loadPathAct);
+    fileToolBar->addAction(generateDataAct);
     
     // 导航工具栏（改为滑条控制全局T）
     navigationToolBar = addToolBar("导航");
@@ -265,8 +285,8 @@ void MainWindow::loadAirwayModel()
         return;
     }
     
-    // 传递数据给静态库
-    if (polyData && bronchoscopyAPI->LoadAirwayModel(polyData)) {
+    bool loaded = polyData && bronchoscopyAPI->LoadAirwayModel(polyData);
+    if (loaded) {
         statusBar()->showMessage(QString("成功加载模型: %1").arg(fileName), 3000);
         statusLabel->setText("模型已加载");
         
@@ -279,6 +299,8 @@ void MainWindow::loadAirwayModel()
         QMessageBox::warning(this, "加载失败", "无法加载模型文件");
         statusBar()->showMessage("模型加载失败", 3000);
     }
+
+    updateActionStates();
 }
 
 void MainWindow::loadCameraPath()
@@ -328,15 +350,14 @@ void MainWindow::loadCameraPath()
     
     file.close();
     
-    // 传递数据给静态库（只传递位置，方向自动计算）
-    if (!positions.empty() && bronchoscopyAPI->LoadCameraPath(positions)) {
+    bool loaded = !positions.empty() && bronchoscopyAPI->LoadCameraPath(positions);
+    if (loaded) {
         int total = bronchoscopyAPI->GetTotalPathNodes();
         statusBar()->showMessage(QString("成功加载路径: %1 (%2个节点)").arg(fileName).arg(total), 3000);
         statusLabel->setText("T = 0.000");
         
-        // 启用滑条控制，禁用旧导航按钮
         if (splineSlider) {
-            splineSlider->setEnabled(true);
+            QSignalBlocker blocker(splineSlider);
             splineSlider->setValue(0);
         }
         
@@ -347,6 +368,8 @@ void MainWindow::loadCameraPath()
         QMessageBox::warning(this, "加载失败", "无法加载路径文件，请检查文件格式\n需要至少2个点");
         statusBar()->showMessage("路径加载失败", 3000);
     }
+
+    updateActionStates();
 }
 
 // 已移除 navigateNext/navigatePrevious（改用样条T控制）
@@ -409,4 +432,214 @@ void MainWindow::onSplineSliderChanged(int value)
     // 刷新渲染窗口
     if (overviewWidget) overviewWidget->GetRenderWindow()->Render();
     if (endoscopeWidget) endoscopeWidget->GetRenderWindow()->Render();
+}
+
+QString MainWindow::ensureResultDirectory() const
+{
+    auto createResult = [](QDir dir) -> QString {
+        if (!dir.exists("result")) {
+            if (!dir.mkpath("result")) {
+                return QString();
+            }
+        }
+        return dir.filePath("result");
+    };
+
+    QDir probe(QCoreApplication::applicationDirPath());
+    for (int i = 0; i < 6; ++i) {
+        if (QFile::exists(probe.filePath("config.cmake")) ||
+            QFile::exists(probe.filePath("README.md"))) {
+            QString candidate = createResult(probe);
+            if (!candidate.isEmpty()) {
+                return candidate;
+            }
+        }
+        if (!probe.cdUp()) {
+            break;
+        }
+    }
+
+    QDir fallback(QDir::currentPath());
+    return createResult(fallback);
+}
+
+void MainWindow::updateActionStates()
+{
+    const bool hasPath = bronchoscopyAPI->HasPath();
+    const bool hasModel = bronchoscopyAPI->HasModel();
+
+    if (resetAct) {
+        resetAct->setEnabled(hasPath);
+    }
+    if (splineSlider) {
+        if (!hasPath) {
+            QSignalBlocker blocker(splineSlider);
+            splineSlider->setValue(0);
+        }
+        splineSlider->setEnabled(hasPath);
+    }
+    if (generateDataAct) {
+        generateDataAct->setEnabled(hasPath && hasModel);
+    }
+}
+
+void MainWindow::generateDataset()
+{
+    if (!bronchoscopyAPI->HasModel() || !bronchoscopyAPI->HasPath()) {
+        QMessageBox::warning(this, "生成失败", "请先加载气管模型和相机路径");
+        return;
+    }
+
+    bool ok = false;
+    QString inputId = QInputDialog::getText(
+        this,
+        "路径编号",
+        "请输入路径编号（两位，例如 01）：",
+        QLineEdit::Normal,
+        datasetPathId,
+        &ok);
+    if (!ok) {
+        return;
+    }
+
+    inputId = inputId.trimmed();
+    if (!inputId.isEmpty()) {
+        datasetPathId = inputId;
+    }
+    if (datasetPathId.isEmpty()) {
+        datasetPathId = "01";
+    }
+    datasetPathId = datasetPathId.rightJustified(2, QLatin1Char('0'));
+
+    QString resultDirPath = ensureResultDirectory();
+    if (resultDirPath.isEmpty()) {
+        QMessageBox::warning(this, "生成失败", "无法创建 result 目录，请检查写入权限");
+        return;
+    }
+    QDir resultDir(resultDirPath);
+
+    constexpr double targetFov = 60.0;
+    bronchoscopyAPI->SetEndoscopeFOV(targetFov);
+
+    double totalLength = bronchoscopyAPI->GetPathTotalLength();
+    if (totalLength <= 0.0) {
+        QMessageBox::warning(this, "生成失败", "路径长度无效，无法生成数据");
+        return;
+    }
+
+    auto randomRange = [](double minVal, double maxVal) {
+        double t = QRandomGenerator::global()->generateDouble();
+        return minVal + (maxVal - minVal) * t;
+    };
+
+    QJsonArray frames;
+    int frameIndex = 1;
+    double lastSampleDistance = -1.0;
+
+    auto captureFrame = [&](double distance) -> bool {
+        if (!bronchoscopyAPI->SetCameraByDistance(distance)) {
+            QMessageBox::warning(this, "生成失败", "无法根据路径距离定位相机");
+            return false;
+        }
+
+        double rollOffset = randomRange(-datasetRollRangeDeg, datasetRollRangeDeg);
+        bronchoscopyAPI->ApplyRollOffset(rollOffset);
+
+        BronchoscopyLib::MaterialParameters matParams;
+        matParams.brightness = randomRange(0.8, 1.3);
+        matParams.reflectivity = randomRange(0.05, 0.5);
+        matParams.ambient = randomRange(0.1, 0.4);
+        matParams.attenuation = randomRange(0.05, 0.35);
+        bronchoscopyAPI->ApplyMaterialParameters(matParams);
+
+        QString imageName = QString("path_%1_%2.png")
+                                .arg(datasetPathId)
+                                .arg(frameIndex, 2, 10, QLatin1Char('0'));
+        QString imagePath = resultDir.filePath(imageName);
+
+        if (!bronchoscopyAPI->CaptureEndoscopeImage(imagePath.toStdString(), 256, 256)) {
+            QMessageBox::warning(this, "生成失败", "保存PNG失败，请检查result目录写入权限");
+            return false;
+        }
+
+        BronchoscopyLib::CameraPose pose;
+        if (!bronchoscopyAPI->GetCurrentEndoscopePose(pose)) {
+            QMessageBox::warning(this, "生成失败", "无法获取当前相机位姿");
+            return false;
+        }
+
+        QJsonObject entry;
+        entry["image"] = imageName;
+
+        QJsonObject positionObject;
+        positionObject["x"] = pose.position[0];
+        positionObject["y"] = pose.position[1];
+        positionObject["z"] = pose.position[2];
+        entry["position"] = positionObject;
+
+        QJsonObject eulerObject;
+        eulerObject["roll"] = pose.euler[0];
+        eulerObject["pitch"] = pose.euler[1];
+        eulerObject["yaw"] = pose.euler[2];
+        entry["euler_deg"] = eulerObject;
+
+        QJsonArray rotationRows;
+        for (int r = 0; r < 3; ++r) {
+            QJsonArray row;
+            for (int c = 0; c < 3; ++c) {
+                row.append(pose.rotationMatrix[r * 3 + c]);
+            }
+            rotationRows.append(row);
+        }
+        entry["rotation_matrix"] = rotationRows;
+        entry["distance_mm"] = distance;
+        entry["roll_offset_deg"] = rollOffset;
+
+        frames.append(entry);
+        ++frameIndex;
+        lastSampleDistance = distance;
+        return true;
+    };
+
+    for (double distance = 0.0; distance <= totalLength + 1e-6; distance += datasetStepMm) {
+        if (!captureFrame(distance)) {
+            return;
+        }
+    }
+    if (totalLength - lastSampleDistance > 1e-3) {
+        if (!captureFrame(totalLength)) {
+            return;
+        }
+    }
+
+    if (frames.isEmpty()) {
+        QMessageBox::warning(this, "生成失败", "未能生成任何图像帧");
+        return;
+    }
+
+    QJsonObject root;
+    root["path_id"] = datasetPathId;
+    root["fov_deg"] = targetFov;
+    root["step_mm"] = datasetStepMm;
+    root["frame_count"] = frames.size();
+    root["frames"] = frames;
+
+    QString jsonName = QString("path_%1.json").arg(datasetPathId);
+    QFile jsonFile(resultDir.filePath(jsonName));
+    if (!jsonFile.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+        QMessageBox::warning(this, "生成失败", "无法写入JSON文件，请检查result目录权限");
+        return;
+    }
+    jsonFile.write(QJsonDocument(root).toJson(QJsonDocument::Indented));
+    jsonFile.close();
+
+    statusBar()->showMessage(
+        QString("已生成 %1 张图像和JSON: %2")
+            .arg(frames.size())
+            .arg(jsonName),
+        5000);
+    QMessageBox::information(this, "生成完成",
+                             QString("生成完成，共导出 %1 张PNG。\n保存于：%2")
+                                 .arg(frames.size())
+                                 .arg(resultDir.filePath("")));
 }

@@ -8,6 +8,10 @@
 #include <vtkInteractorStyleTrackballCamera.h>
 #include <vtkCamera.h>
 #include <vtkRendererCollection.h>
+#include <vtkWindowToImageFilter.h>
+#include <vtkPNGWriter.h>
+#include <vtkImageResize.h>
+#include <vtkImageData.h>
 
 #include <iostream>
 
@@ -207,6 +211,38 @@ namespace BronchoscopyLib {
     
     bool RenderingEngine::IsInitialized() const {
         return pImpl->initialized;
+    }
+
+    bool RenderingEngine::CaptureEndoscopeImage(const std::string& filePath, int width, int height) {
+        if (!pImpl->endoscopeWindow) {
+            std::cerr << "RenderingEngine: Endoscope window is not set, cannot capture image" << std::endl;
+            return false;
+        }
+
+        pImpl->endoscopeWindow->Render();
+        vtkSmartPointer<vtkWindowToImageFilter> w2i = vtkSmartPointer<vtkWindowToImageFilter>::New();
+        w2i->SetInput(pImpl->endoscopeWindow);
+        w2i->SetInputBufferTypeToRGB();
+        w2i->ReadFrontBufferOff();
+        w2i->Update();
+
+        vtkSmartPointer<vtkImageData> inputImage = w2i->GetOutput();
+        vtkSmartPointer<vtkImageData> finalImage = inputImage;
+
+        if (width > 0 && height > 0) {
+            vtkSmartPointer<vtkImageResize> resizeFilter = vtkSmartPointer<vtkImageResize>::New();
+            resizeFilter->SetInputData(inputImage);
+            resizeFilter->SetResizeMethodToOutputDimensions();
+            resizeFilter->SetOutputDimensions(width, height, 1);
+            resizeFilter->Update();
+            finalImage = resizeFilter->GetOutput();
+        }
+
+        vtkSmartPointer<vtkPNGWriter> writer = vtkSmartPointer<vtkPNGWriter>::New();
+        writer->SetFileName(filePath.c_str());
+        writer->SetInputData(finalImage);
+        writer->Write();
+        return true;
     }
     
 } // namespace BronchoscopyLib

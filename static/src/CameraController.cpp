@@ -361,5 +361,118 @@ namespace BronchoscopyLib {
             }
         }
     }
+
+    bool CameraController::GetEndoscopePose(CameraPose& pose) const {
+        if (!pImpl->endoscopeCamera) {
+            return false;
+        }
+
+        double position[3];
+        double focalPoint[3];
+        double viewUp[3];
+        pImpl->endoscopeCamera->GetPosition(position);
+        pImpl->endoscopeCamera->GetFocalPoint(focalPoint);
+        pImpl->endoscopeCamera->GetViewUp(viewUp);
+
+        double forward[3] = {
+            focalPoint[0] - position[0],
+            focalPoint[1] - position[1],
+            focalPoint[2] - position[2]
+        };
+        if (vtkMath::Normalize(forward) < 1e-8) {
+            return false;
+        }
+
+        double up[3] = {viewUp[0], viewUp[1], viewUp[2]};
+        if (vtkMath::Normalize(up) < 1e-8) {
+            up[0] = 0.0; up[1] = 1.0; up[2] = 0.0;
+        }
+
+        double right[3];
+        vtkMath::Cross(forward, up, right);
+        if (vtkMath::Normalize(right) < 1e-8) {
+            double fallback[3] = {0.0, 1.0, 0.0};
+            vtkMath::Cross(forward, fallback, right);
+            vtkMath::Normalize(right);
+        }
+        vtkMath::Cross(right, forward, up);
+        vtkMath::Normalize(up);
+
+        for (int i = 0; i < 3; ++i) {
+            pose.position[i] = position[i];
+            pose.forward[i] = forward[i];
+            pose.up[i] = up[i];
+            pose.right[i] = right[i];
+        }
+
+        double rot[9] = {
+            right[0], right[1], right[2],
+            up[0],    up[1],    up[2],
+            forward[0], forward[1], forward[2]
+        };
+        for (int i = 0; i < 9; ++i) {
+            pose.rotationMatrix[i] = rot[i];
+        }
+
+        double sy = std::sqrt(rot[0] * rot[0] + rot[3] * rot[3]);
+        bool singular = sy < 1e-6;
+        double yaw, pitch, roll;
+        if (!singular) {
+            yaw = std::atan2(rot[3], rot[0]);
+            pitch = std::atan2(-rot[6], sy);
+            roll = std::atan2(rot[7], rot[8]);
+        } else {
+            yaw = std::atan2(-rot[1], rot[4]);
+            pitch = std::atan2(-rot[6], sy);
+            roll = 0.0;
+        }
+
+        pose.euler[0] = vtkMath::DegreesFromRadians(roll);
+        pose.euler[1] = vtkMath::DegreesFromRadians(pitch);
+        pose.euler[2] = vtkMath::DegreesFromRadians(yaw);
+
+        return true;
+    }
+
+    void CameraController::ApplyRollOffset(double degrees) {
+        if (!pImpl->endoscopeCamera) {
+            return;
+        }
+        double position[3];
+        double focalPoint[3];
+        double viewUp[3];
+        pImpl->endoscopeCamera->GetPosition(position);
+        pImpl->endoscopeCamera->GetFocalPoint(focalPoint);
+        pImpl->endoscopeCamera->GetViewUp(viewUp);
+
+        double forward[3] = {
+            focalPoint[0] - position[0],
+            focalPoint[1] - position[1],
+            focalPoint[2] - position[2]
+        };
+        if (vtkMath::Normalize(forward) < 1e-8) {
+            return;
+        }
+        if (vtkMath::Normalize(viewUp) < 1e-8) {
+            viewUp[0] = 0.0; viewUp[1] = 1.0; viewUp[2] = 0.0;
+        }
+
+        double radians = vtkMath::RadiansFromDegrees(degrees);
+        double dot = vtkMath::Dot(forward, viewUp);
+        double rotatedUp[3];
+        double sinTheta = std::sin(radians);
+        double cosTheta = std::cos(radians);
+        double axisCross[3];
+        vtkMath::Cross(forward, viewUp, axisCross);
+        vtkMath::Normalize(axisCross);
+        for (int i = 0; i < 3; ++i) {
+            rotatedUp[i] = viewUp[i] * cosTheta +
+                           axisCross[i] * sinTheta +
+                           forward[i] * dot * (1.0 - cosTheta);
+        }
+        vtkMath::Normalize(rotatedUp);
+
+        pImpl->endoscopeCamera->SetViewUp(rotatedUp);
+    }
     
 } // namespace BronchoscopyLib

@@ -2,7 +2,9 @@
 #define BRONCHOSCOPY_API_H
 
 #include <memory>
+#include <string>
 #include <vector>
+#include "BronchoscopyDataTypes.h"
 
 // Forward declarations
 class vtkPolyData;
@@ -65,6 +67,13 @@ namespace BronchoscopyLib {
         // Camera control
         void ResetCameras();
         void Render();
+        void SetEndoscopeFOV(double angle);
+        bool CaptureEndoscopeImage(const std::string& filePath, int width = 256, int height = 256);
+        bool GetCurrentEndoscopePose(CameraPose& pose) const;
+        bool SetCameraByDistance(double distance);
+        double GetPathTotalLength() const;
+        void ApplyRollOffset(double degrees);
+        void ApplyMaterialParameters(const MaterialParameters& params);
         
         // Animation control
         bool UpdateAnimation();

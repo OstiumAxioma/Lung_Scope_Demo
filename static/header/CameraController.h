@@ -2,6 +2,7 @@
 #define CAMERA_CONTROLLER_H
 
 #include <memory>
+#include "BronchoscopyDataTypes.h"
 
 // 前向声明VTK类
 class vtkCamera;
@@ -54,6 +55,8 @@ namespace BronchoscopyLib {
         
         // 获取当前相机状态
         void GetCurrentEndoscopeState(PathNode* state) const;
+        bool GetEndoscopePose(CameraPose& pose) const;
+        void ApplyRollOffset(double degrees);
         
     private:
         class Impl;

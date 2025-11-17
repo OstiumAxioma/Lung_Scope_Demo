@@ -1,5 +1,6 @@
 #include "ModelManager.h"
 #include "ShaderSystem.h"
+#include <algorithm>
 
 // VTK头文件
 #include <vtkSmartPointer.h>
@@ -335,6 +336,29 @@ namespace BronchoscopyLib {
                   << bounds[2] << ", " << bounds[3] << "] ["
                   << bounds[4] << ", " << bounds[5] << "]" << std::endl;
         std::cout << "==================" << std::endl;
+    }
+
+    void ModelManager::ApplyMaterialParameters(const MaterialParameters& params) {
+        auto applyParams = [&](vtkActor* actor, const double baseColor[3]) {
+            if (!actor) {
+                return;
+            }
+            vtkProperty* prop = actor->GetProperty();
+            double color[3];
+            for (int i = 0; i < 3; ++i) {
+                double value = baseColor[i] * params.brightness;
+                color[i] = std::clamp(value, 0.0, 1.0);
+            }
+            prop->SetColor(color);
+            prop->SetAmbient(std::clamp(params.ambient, 0.0, 1.0));
+            prop->SetDiffuse(std::clamp(1.0 - params.attenuation, 0.0, 1.0));
+            prop->SetSpecular(std::clamp(params.reflectivity, 0.0, 1.0));
+            double specPower = 10.0 + std::clamp(params.reflectivity, 0.0, 1.0) * 90.0;
+            prop->SetSpecularPower(specPower);
+        };
+
+        applyParams(pImpl->overviewActor, pImpl->overviewColor);
+        applyParams(pImpl->endoscopeActor, pImpl->endoscopeColor);
     }
     
 } // namespace BronchoscopyLib

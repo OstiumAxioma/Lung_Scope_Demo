@@ -2,6 +2,7 @@
 #define MODEL_MANAGER_H
 
 #include <memory>
+#include "BronchoscopyDataTypes.h"
 
 // 前向声明VTK类
 class vtkPolyData;
@@ -59,6 +60,9 @@ namespace BronchoscopyLib {
         
         // 调试输出
         void PrintModelInfo() const;
+
+        // 材质参数调节
+        void ApplyMaterialParameters(const MaterialParameters& params);
         
     private:
         class Impl;

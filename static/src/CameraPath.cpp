@@ -1,4 +1,5 @@
 #include "CameraPath.h"
+#include <algorithm>
 #include <cmath>
 #include <iostream>
 
@@ -37,6 +38,8 @@ namespace BronchoscopyLib {
         splinePositions.clear();
         splineTangents.clear();
         segmentSampleOffsets.clear();
+        splineArcLengths.clear();
+        totalSplineLength = 0.0;
     }
 
     void CameraPath::AddPoint(double x, double y, double z, 
@@ -372,7 +375,9 @@ namespace BronchoscopyLib {
     void CameraPath::GenerateSpline(int samplesPerSegment) {
         splinePositions.clear();
         splineTangents.clear();
+        splineArcLengths.clear();
         segmentSampleOffsets.clear();
+        totalSplineLength = 0.0;
 
         if (nodeCount < 2) {
             splineValid = false;
@@ -386,6 +391,7 @@ namespace BronchoscopyLib {
         int totalSamples = segments * splineSamplesPerSegment + 1; // 包含最后端点
         splinePositions.resize(totalSamples * 3);
         splineTangents.resize(totalSamples * 3);
+        splineArcLengths.resize(totalSamples);
 
         int sampleIndex = 0;
         for (int seg = 0; seg < segments; ++seg) {
@@ -415,6 +421,19 @@ namespace BronchoscopyLib {
         splineTangents[base+0] = tanEnd[0];
         splineTangents[base+1] = tanEnd[1];
         splineTangents[base+2] = tanEnd[2];
+
+        // 计算累积弧长
+        splineArcLengths[0] = 0.0;
+        for (int i = 1; i < totalSamples; ++i) {
+            int prevBase = (i - 1) * 3;
+            int currBase = i * 3;
+            double dx = splinePositions[currBase+0] - splinePositions[prevBase+0];
+            double dy = splinePositions[currBase+1] - splinePositions[prevBase+1];
+            double dz = splinePositions[currBase+2] - splinePositions[prevBase+2];
+            double segLen = std::sqrt(dx*dx + dy*dy + dz*dz);
+            splineArcLengths[i] = splineArcLengths[i-1] + segLen;
+        }
+        totalSplineLength = splineArcLengths.back();
 
         splineValid = true;
     }
@@ -487,6 +506,78 @@ namespace BronchoscopyLib {
         }
         double len = std::sqrt(dir[0]*dir[0] + dir[1]*dir[1] + dir[2]*dir[2]);
         if (len > 1e-8) { dir[0]/=len; dir[1]/=len; dir[2]/=len; }
+    }
+
+    bool CameraPath::EnsureSpline(int samplesPerSegment) {
+        if (!splineValid || samplesPerSegment > splineSamplesPerSegment) {
+            GenerateSpline(std::max(samplesPerSegment, 2));
+        }
+        return splineValid;
+    }
+
+    double CameraPath::GetSplineTotalLength() const {
+        if (splineValid && !splineArcLengths.empty()) {
+            return totalSplineLength;
+        }
+        return CalculatePathLength();
+    }
+
+    bool CameraPath::GetSplinePosDirByDistance(double distance, double pos[3], double dir[3]) const {
+        if (!splineValid || splineArcLengths.empty()) {
+            return false;
+        }
+
+        if (distance <= 0.0) {
+            for (int i = 0; i < 3; ++i) {
+                pos[i] = splinePositions[i];
+                dir[i] = splineTangents[i];
+            }
+            return true;
+        }
+
+        double clampedDistance = distance;
+        if (clampedDistance >= totalSplineLength) {
+            int base = static_cast<int>(splinePositions.size()) - 3;
+            for (int i = 0; i < 3; ++i) {
+                pos[i] = splinePositions[base + i];
+                dir[i] = splineTangents[base + i];
+            }
+            return true;
+        }
+
+        auto it = std::lower_bound(splineArcLengths.begin(), splineArcLengths.end(), clampedDistance);
+        if (it == splineArcLengths.end()) {
+            int base = static_cast<int>(splinePositions.size()) - 3;
+            for (int i = 0; i < 3; ++i) {
+                pos[i] = splinePositions[base + i];
+                dir[i] = splineTangents[base + i];
+            }
+            return true;
+        }
+
+        int idx = static_cast<int>(std::distance(splineArcLengths.begin(), it));
+        int prevIdx = std::max(0, idx - 1);
+        double prevDist = splineArcLengths[prevIdx];
+        double nextDist = splineArcLengths[idx];
+        double denom = std::max(1e-8, nextDist - prevDist);
+        double localT = (clampedDistance - prevDist) / denom;
+
+        int basePrev = prevIdx * 3;
+        int baseNext = idx * 3;
+        for (int i = 0; i < 3; ++i) {
+            pos[i] = splinePositions[basePrev + i] +
+                     (splinePositions[baseNext + i] - splinePositions[basePrev + i]) * localT;
+            dir[i] = splineTangents[basePrev + i] +
+                     (splineTangents[baseNext + i] - splineTangents[basePrev + i]) * localT;
+        }
+
+        double len = std::sqrt(dir[0]*dir[0] + dir[1]*dir[1] + dir[2]*dir[2]);
+        if (len > 1e-8) {
+            dir[0] /= len;
+            dir[1] /= len;
+            dir[2] /= len;
+        }
+        return true;
     }
 
 } // namespace BronchoscopyLib

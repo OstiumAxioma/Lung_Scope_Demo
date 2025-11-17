@@ -109,6 +109,7 @@ set(HEADERS
     header/SceneManager.h
     header/ShaderSystem.h
     header/BronchoscopyAPI.h
+    header/BronchoscopyDataTypes.h
 )
 
 # 创建静态库

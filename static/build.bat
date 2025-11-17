@@ -82,7 +82,7 @@ echo Clean complete.
 echo.
 
 :: 检查是否需要传递Qt5路径参数
-set CMAKE_ARGS=-G "Visual Studio 17 2022" -A x64
+set CMAKE_ARGS=-G "Visual Studio 16 2019" -A x64
 
 :: 如果用户提供了Qt5路径作为参数
 if not "%~1"=="" (

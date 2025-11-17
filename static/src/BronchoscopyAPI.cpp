@@ -15,6 +15,7 @@
 #include <vtkPolyData.h>
 
 #include <iostream>
+#include <string>
 
 namespace BronchoscopyLib {
     
@@ -212,6 +213,59 @@ namespace BronchoscopyLib {
     
     void BronchoscopyAPI::Render() {
         pImpl->renderingEngine->Render();
+    }
+
+    void BronchoscopyAPI::SetEndoscopeFOV(double angle) {
+        pImpl->cameraController->SetEndoscopeFOV(angle);
+    }
+
+    bool BronchoscopyAPI::CaptureEndoscopeImage(const std::string& filePath, int width, int height) {
+        return pImpl->renderingEngine->CaptureEndoscopeImage(filePath, width, height);
+    }
+
+    bool BronchoscopyAPI::GetCurrentEndoscopePose(CameraPose& pose) const {
+        return pImpl->cameraController->GetEndoscopePose(pose);
+    }
+
+    double BronchoscopyAPI::GetPathTotalLength() const {
+        CameraPath* path = pImpl->pathVisualization->GetCameraPath();
+        if (!path) {
+            return 0.0;
+        }
+        path->EnsureSpline(200);
+        return path->GetSplineTotalLength();
+    }
+
+    bool BronchoscopyAPI::SetCameraByDistance(double distance) {
+        CameraPath* path = pImpl->pathVisualization->GetCameraPath();
+        if (!path) {
+            return false;
+        }
+        if (!path->EnsureSpline(200)) {
+            return false;
+        }
+
+        double pos[3];
+        double dir[3];
+        if (!path->GetSplinePosDirByDistance(distance, pos, dir)) {
+            return false;
+        }
+
+        pImpl->cameraController->UpdateEndoscopeCamera(pos, dir);
+        if (pImpl->pathVisualization->IsMarkerVisible()) {
+            pImpl->pathVisualization->UpdatePositionMarker(pos);
+        }
+        pImpl->renderingEngine->RenderEndoscope();
+        return true;
+    }
+
+    void BronchoscopyAPI::ApplyRollOffset(double degrees) {
+        pImpl->cameraController->ApplyRollOffset(degrees);
+    }
+
+    void BronchoscopyAPI::ApplyMaterialParameters(const MaterialParameters& params) {
+        pImpl->modelManager->ApplyMaterialParameters(params);
+        Render();
     }
     
     bool BronchoscopyAPI::HasModel() const {

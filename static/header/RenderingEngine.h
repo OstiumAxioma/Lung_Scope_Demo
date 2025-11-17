@@ -2,6 +2,7 @@
 #define RENDERING_ENGINE_H
 
 #include <memory>
+#include <string>
 
 // 前向声明VTK类
 class vtkRenderer;
@@ -56,6 +57,9 @@ namespace BronchoscopyLib {
         
         // 获取渲染状态
         bool IsInitialized() const;
+
+        // 捕获内窥镜视图图像
+        bool CaptureEndoscopeImage(const std::string& filePath, int width, int height);
         
     private:
         class Impl;
