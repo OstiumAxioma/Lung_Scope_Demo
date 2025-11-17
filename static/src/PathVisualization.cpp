@@ -33,6 +33,7 @@ namespace BronchoscopyLib {
         double pathTubeRadius;
         double pathLineWidth;
         bool showPath;
+        bool showEndoscopePathLine;
         
         // 位置标记（红球）
         vtkSmartPointer<vtkSphereSource> positionMarker;
@@ -48,7 +49,7 @@ namespace BronchoscopyLib {
         
         Impl() : cameraPath(nullptr), overviewWindow(nullptr), overviewRenderer(nullptr),
                  pathOpacity(0.5), pathTubeRadius(1.0), pathLineWidth(2.0), markerRadius(2.0),
-                 showPath(true), showMarker(true) {
+                 showPath(true), showMarker(true), showEndoscopePathLine(true) {
             // 默认颜色
             pathColor[0] = 0.0; pathColor[1] = 1.0; pathColor[2] = 0.0;  // 绿色
             markerColor[0] = 1.0; markerColor[1] = 0.0; markerColor[2] = 0.0;  // 红色
@@ -85,7 +86,7 @@ namespace BronchoscopyLib {
                 pathLineActor->GetProperty()->SetColor(pathColor);
                 pathLineActor->GetProperty()->SetOpacity(pathOpacity);
                 pathLineActor->GetProperty()->SetLineWidth(static_cast<float>(pathLineWidth));
-                pathLineActor->SetVisibility(showPath);
+                pathLineActor->SetVisibility(showPath && showEndoscopePathLine);
                 // 释放（GeneratePathPolyData已增加引用计数）
                 pathLine->UnRegister(nullptr);
             }
@@ -253,7 +254,7 @@ namespace BronchoscopyLib {
             pImpl->pathActor->SetVisibility(show);
         }
         if (pImpl->pathLineActor) {
-            pImpl->pathLineActor->SetVisibility(show);
+            pImpl->pathLineActor->SetVisibility(show && pImpl->showEndoscopePathLine);
         }
     }
     
@@ -270,6 +271,17 @@ namespace BronchoscopyLib {
     
     bool PathVisualization::IsMarkerVisible() const {
         return pImpl->showMarker;
+    }
+
+    void PathVisualization::SetEndoscopePathVisible(bool show) {
+        pImpl->showEndoscopePathLine = show;
+        if (pImpl->pathLineActor) {
+            pImpl->pathLineActor->SetVisibility(pImpl->showPath && show);
+        }
+    }
+
+    bool PathVisualization::IsEndoscopePathVisible() const {
+        return pImpl->showEndoscopePathLine;
     }
     
     void PathVisualization::SetPathColor(double r, double g, double b) {

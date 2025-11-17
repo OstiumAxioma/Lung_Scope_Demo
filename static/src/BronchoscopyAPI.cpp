@@ -176,6 +176,15 @@ namespace BronchoscopyLib {
     bool BronchoscopyAPI::IsMarkerVisible() const {
         return pImpl->sceneManager->IsMarkerVisible();
     }
+
+    void BronchoscopyAPI::SetEndoscopePathVisible(bool show) {
+        pImpl->pathVisualization->SetEndoscopePathVisible(show);
+        Render();
+    }
+
+    bool BronchoscopyAPI::IsEndoscopePathVisible() const {
+        return pImpl->pathVisualization->IsEndoscopePathVisible();
+    }
     
     void BronchoscopyAPI::SetPathColor(double r, double g, double b) {
         pImpl->pathVisualization->SetPathColor(r, g, b);

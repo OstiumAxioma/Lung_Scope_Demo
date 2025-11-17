@@ -179,7 +179,7 @@ namespace BronchoscopyLib {
         
         // 创建内窥镜视图的头灯（跟随相机的光源）
         vtkSmartPointer<vtkLight> endoscopeHeadLight = vtkSmartPointer<vtkLight>::New();
-        endoscopeHeadLight->SetLightTypeToHeadlight();  // 设置为头灯类型，自动跟随相机
+        endoscopeHeadLight->SetLightTypeToSceneLight();  // 使用点光源类型
         endoscopeHeadLight->SetIntensity(1.5);          // 增强亮度使效果更明显
         endoscopeHeadLight->SetColor(1.0, 0.98, 0.96);  // 轻微暖白色，模拟内窥镜光源
         endoscopeHeadLight->SetPositional(true);        // 设置为点光源（而不是方向光）

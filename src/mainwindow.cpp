@@ -518,6 +518,19 @@ void MainWindow::generateDataset()
     }
     QDir resultDir(resultDirPath);
 
+    struct PathVisibilityRestorer {
+        BronchoscopyLib::BronchoscopyAPI* api;
+        bool previous;
+        ~PathVisibilityRestorer() {
+            if (api) {
+                api->SetEndoscopePathVisible(previous);
+            }
+        }
+    };
+    PathVisibilityRestorer visibilityGuard{bronchoscopyAPI.get(),
+                                          bronchoscopyAPI->IsEndoscopePathVisible()};
+    bronchoscopyAPI->SetEndoscopePathVisible(false);
+
     constexpr double targetFov = 60.0;
     bronchoscopyAPI->SetEndoscopeFOV(targetFov);
 

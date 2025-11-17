@@ -54,6 +54,8 @@ namespace BronchoscopyLib {
         void ShowMarker(bool show);
         bool IsPathVisible() const;
         bool IsMarkerVisible() const;
+        void SetEndoscopePathVisible(bool show);
+        bool IsEndoscopePathVisible() const;
         
         // Appearance settings
         void SetPathColor(double r, double g, double b);
